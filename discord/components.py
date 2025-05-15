@@ -94,6 +94,7 @@ __all__ = (
     'Section',
     'TextDisplay',
     'Thumbnail',
+    'UnfurledMediaItemStructur',
     'MediaGallery',
     'File',
     'Seperator',

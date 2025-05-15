@@ -1425,6 +1425,9 @@ class ActionRow(Generic[T]):
     def __init__(self, *components: Button) -> None: ...
 
     @overload
+    def __init__(self, *components: Section) -> None: ...
+
+    @overload
     def __init__(self, components: BaseSelect) -> None: ...
 
     @overload
@@ -1444,6 +1447,9 @@ class ActionRow(Generic[T]):
 
     @overload
     def __class_getitem__(cls, item: Type[Button]) -> ActionRow[Button]: ...
+
+    @overload
+    def __class_getitem__(cls, item: Type[Section]) -> ActionRow[Section]: ...
 
     @overload
     def __class_getitem__(cls, item: Tuple[Type[Button], ...]) -> ActionRow[Button, ...]: ...

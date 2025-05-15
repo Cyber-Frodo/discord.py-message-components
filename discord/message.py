@@ -1293,6 +1293,27 @@ class Message(Hashable, Generic[_MCH]):
         if self.type is MessageType.stage_topic_change:
             return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
 
+        if self.type is MessageType.guild_application_premium_subscription:
+            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+
+        if self.type is MessageType.guild_incident_alert_mode_enabled:
+            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+
+        if self.type is MessageType.guild_incident_alert_mode_disabled:
+            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+
+        if self.type is MessageType.guild_incident_report_raid:
+            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+
+        if self.type is MessageType.guild_incident_report_false_alarm:
+            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+
+        if self.type is MessageType.purchase_notification:
+            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+
+        if self.type is MessageType.poll_result:
+            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+
         return ''
 
         # TODO: Add missing system message types

@@ -329,6 +329,13 @@ class ComponentType(Enum):
     RoleSelect        = 6
     MentionableSelect = 7
     ChannelSelect     = 8
+    Section           = 9
+    TextDisplay       = 10
+    Thumbnail         = 11
+    MediaGallery      = 12
+    File              = 13
+    Seperator         = 14
+    Container         = 17
 
     def __str__(self):
         return getattr(self, 'name')
@@ -709,6 +716,12 @@ class MessageType(Enum):
     stage_raise_hand                             = 30
     stage_topic_change                           = 31
     guild_application_premium_subscription       = 32
+    guild_incident_alert_mode_enabled            = 36
+    guild_incident_alert_mode_disabled           = 37
+    guild_incident_report_raid                   = 38
+    guild_incident_report_false_alarm            = 39
+    purchase_notification                        = 44
+    poll_result                                  = 46
 
 
 class ReactionType(Enum):

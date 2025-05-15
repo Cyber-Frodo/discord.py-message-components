@@ -25,6 +25,7 @@ DEALINGS IN THE SOFTWARE.
 """
 from __future__ import annotations
 
+from optparse import OptionParser
 from typing import (
     Dict,
     List,
@@ -51,6 +52,13 @@ __all__ = (
     'SelectOption',
     'DefaultValue',
     'TextInput',
+    'Section',
+    'TextDisplay',
+    'Thumbnail',
+    'MediaGallery',
+    'File',
+    'Seperator',
+    'Container',
     'MessageComponent',
     'Attachment',
     'PartialEmoji',
@@ -65,8 +73,9 @@ __all__ = (
     'Modal'
 )
 
+from .. import Colour
 
-ComponentType = Literal[1, 2, 3, 4, 5, 6, 7, 8]
+ComponentType = Literal[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 17]
 ButtonStyle = Literal[1, 2, 3, 4, 5, 6]
 TextInputStyle = Literal[1, 2]
 SelectDefaultValueType = Literal['user', 'role', 'channel']
@@ -101,7 +110,13 @@ MessageType = Literal[
     28,  # Stage end
     29,  # Stage speaker change
     31,  # Stage topic change
-    32   # Guild application premium subscription
+    32,  # Guild application premium subscription
+    36,  # GUILD INCIDENT ALERT MODE ENABLED
+    37,  # GUILD INCIDENT ALERT MODE DISABLED
+    38,  # GUILD INCIDENT REPORT RAID
+    39,  # GUILD INCIDENT REPORT FALSE ALARM
+    44,  # PURCHASE NOTIFICATION
+    46   # POLL RESULT
 ]
 EmbedType = Literal['rich', 'image', 'video', 'gifv', 'article', 'link']
 MessageActivityType = Literal[1, 2, 3, 5]
@@ -162,7 +177,70 @@ class TextInput(TypedDict):
     placeholder: NotRequired[str]
 
 
-MessageComponent = Union[Button, SelectMenu, TextInput]
+class Section(TypedDict):
+    type: Literal[9]
+    id: Optional[int]
+    components: List[Union[TextDisplay, Button]]
+    accessory: Union[Button]
+
+
+class TextDisplay(TypedDict):
+    type: Literal[10]
+    id: Optional[int]
+    content: str
+
+
+class Thumbnail(TypedDict):
+    type: Literal[11]
+    id: Optional[int]
+    media: Union[UnfurledMediaItemStructur, Attachment]
+    description: Optional[str]
+    spoiler: Optional[bool]
+
+
+class UnfurledMediaItemStructur(TypedDict):
+    url: str
+    proxy_url: Optional[str]
+    height: Optional[int]
+    width: Optional[int]
+    content_type: Optional[str]
+
+
+class MediaGalleryItem(TypedDict):
+    media: UnfurledMediaItemStructur
+    description: Optional[str]
+    spoiler: Optional[bool]
+
+
+class MediaGallery(TypedDict):
+    type: Literal[12]
+    id: int
+    items: List[MediaGalleryItem]
+
+
+class File(TypedDict):
+    type: Literal[13]
+    id: Optional[int]
+    file: UnfurledMediaItemStructur
+    spoiler: Optional[bool]
+
+
+class Seperator(TypedDict):
+    type: Literal[14]
+    id: Optional[int]
+    divider: Optional[bool]
+    spacing: Optional[int]
+
+
+class Container(TypedDict):
+    type: Literal[17]
+    id: Optional[int]
+    components: List[MessageComponent]
+    accent_color: Optional[int]
+    spoiler: Optional[bool]
+
+
+MessageComponent = Union[Button, SelectMenu, TextInput, Section, TextDisplay, Thumbnail, MediaGallery, File, Seperator, Container]
 
 
 class Attachment(TypedDict):

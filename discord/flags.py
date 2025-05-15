@@ -356,22 +356,22 @@ class MessageFlags(BaseFlags):
     @flag_value
     def crossposted(self):
         """:class:`bool`: Returns ``True`` if the message is the original crossposted message."""
-        return 1
+        return 1 << 0
 
     @flag_value
     def is_crossposted(self):
         """:class:`bool`: Returns ``True`` if the message was crossposted from another channel."""
-        return 2
+        return 1 << 1
 
     @flag_value
     def suppress_embeds(self):
         """:class:`bool`: Returns ``True`` if the message's embeds have been suppressed."""
-        return 4
+        return 1 << 2
 
     @flag_value
     def source_message_deleted(self):
         """:class:`bool`: Returns ``True`` if the source message for this crosspost has been deleted."""
-        return 8
+        return 1 << 3
 
     @flag_value
     def urgent(self):
@@ -379,7 +379,7 @@ class MessageFlags(BaseFlags):
 
         An urgent message is one sent by Discord Trust and Safety.
         """
-        return 16
+        return 1 << 4
 
     @flag_value
     def has_thread(self):
@@ -387,7 +387,7 @@ class MessageFlags(BaseFlags):
 
         This message has an associated thread, with the same id as the message.
         """
-        return 32
+        return 1 << 5
 
     @flag_value
     def ephemeral(self):
@@ -395,7 +395,7 @@ class MessageFlags(BaseFlags):
 
         This message is only visible to the user who invoked the Interaction.
         """
-        return 64
+        return 1 << 6
 
     @flag_value
     def loading(self):
@@ -403,12 +403,12 @@ class MessageFlags(BaseFlags):
 
         This message is an interaction response and the bot is "thinking"
         """
-        return 128
+        return 1 << 7
 
     @flag_value
     def failed_to_mention_some_roles_in_thread(self):
         """:class:`bool`: Returns ``True`` if the message failed to mention some roles and add their members to the thread."""
-        return 256
+        return 1 << 8
     
     @flag_value
     def show_link_not_discord_warning(self):
@@ -427,12 +427,22 @@ class MessageFlags(BaseFlags):
         
         The user(s) will still see a mention in the channel, but no push or desktop notification will be sent.
         """
-        return 4096
+        return 1 << 12
     
     @flag_value
     def is_voice_message(self):
         """:class:`bool`: Returns ``True`` if the message is a voice message."""
-        return 8192
+        return 1 << 13
+
+    @flag_value
+    def has_snapshot(self):
+        """:class:`bool`: Returns ``True`` if the message has a snapshot (via Message Forwarding)."""
+        return 1 << 14
+
+    @flag_value
+    def is_component_v2(self):
+        """:class:`bool`: Returns ``True`` if allows you to create fully component-driven messages."""
+        return 1 << 15
 
 
 @fill_with_flags()

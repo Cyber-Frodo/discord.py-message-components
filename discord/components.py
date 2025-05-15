@@ -44,7 +44,7 @@ from typing import (
     Type,
     TypeVar,
     TYPE_CHECKING,
-    Union,
+    Union, Container,
 )
 
 from typing_extensions import Literal, Self, TypeAlias
@@ -59,7 +59,15 @@ if TYPE_CHECKING:
         SelectOption as SelectOptionPayload,
         SelectDefaultValue as SelectDefaultValuePayload,
         TextInput as TextInputPayload,
-        Modal as ModalPayload
+        Modal as ModalPayload,
+        Section as SectionPayload,
+        TextDisplay as TextDisplayPayload,
+        Thumbnail as ThumbnailPayload,
+        MediaGallery as MediaGalleryPayload,
+        File as FilePayload,
+        Seperator as SeperatorPayload,
+        Container as ContainerPayload,
+        UnfurledMediaItemStructur as UnfurledMediaItemStructurPayload
     )
     from .role import Role
     from .user import User
@@ -82,7 +90,14 @@ __all__ = (
     'RoleSelect',
     'MentionableSelect',
     'ChannelSelect',
-    'Modal'
+    'Modal',
+    'Section',
+    'TextDisplay',
+    'Thumbnail',
+    'MediaGallery',
+    'File',
+    'Seperator',
+    'Container'
 )
 
 T = TypeVar('T')
@@ -1427,8 +1442,7 @@ class ActionRow(Generic[T]):
         self.components: List[T] = list(components)
 
     @overload
-    def __class_getitem__(cls, item: Type[Button]) -> ActionRow[Button]:
-        ...
+    def __class_getitem__(cls, item: Type[Button]) -> ActionRow[Button]: ...
 
     @overload
     def __class_getitem__(cls, item: Tuple[Type[Button], ...]) -> ActionRow[Button, ...]: ...
@@ -1617,6 +1631,9 @@ class ActionRow(Generic[T]):
     @overload
     def add_components(self: Self, components: TextInput) -> Self: ...
 
+    @overload
+    def add_components(self: Self, components: TextDisplay) -> Self: ...
+
     def add_components(self: Self, *components: T) -> Self:
         """
         Adds multiple components to the :class:`~discord.ActionRow` and returns itself.
@@ -1779,6 +1796,153 @@ class ActionRow(Generic[T]):
         components = [_component_factory(component) for component in data.get('components', [])]
         return cls(*components)
 
+class Section:
+    def __init__(self,
+                 id: Optional[int] = None,
+                 *,
+                 components: List[TextDisplay],
+                 accessory: Union[Thumbnail, Button]
+    ) -> None:
+        if components and all(isinstance(c, TextDisplay) for c in components) and not (1 <= len(components) <= 3):
+            raise ValueError("Section must have 1 to 3 text components")
+
+        if accessory is None:
+            raise ValueError("accessory is required and cannot be None")
+
+        self.id = id
+        self.components = components
+        self.accessory = accessory
+
+    @property
+    def type(self) -> ComponentType:
+        return ComponentType.Section
+
+    def to_dict(self) -> SectionPayload:
+        payload = {
+            'type': self.type,
+            'components': [c.to_dict() for c in self.components],
+            'accessory': self.accessory.to_dict()
+        }
+        if self.id:
+            payload['id'] = self.id
+        return payload
+
+    @classmethod
+    def from_dict(cls, data: SectionPayload) -> Section:
+        return cls(
+            id=data.get('id'),
+            components=data.get("components"),
+            accessory=data.get("accessory")
+        )
+
+class TextDisplay:
+    def __init__(self,
+                 id: Optional[int] = None,
+                 *,
+                 content: str
+    ) -> None:
+        self.id = id
+        self.content = content
+
+    @property
+    def type(self) -> ComponentType:
+        return ComponentType.TextDisplay
+
+    def to_dict(self) -> TextDisplayPayload:
+        payload = {
+            'type': self.type,
+            'content': self.content
+        }
+        if self.id:
+            payload['id'] = self.id
+        return payload
+
+    @classmethod
+    def from_dict(cls, data: TextDisplayPayload) -> TextDisplay:
+        content = data["content"] if data["content"] else None
+        return cls(
+            id=data.get('id'),
+            content=content,
+        )
+
+
+class Thumbnail:
+    def __init__(self,
+                 id: Optional[int] = None,
+                 description: Optional[str] = None,
+                 spoiler: Optional[bool] = False,
+                 *,
+                 media: UnfurledMediaItemStructur
+    ) -> None:
+        self.id = id
+        self.media = media
+        self.description = description
+        self.spoiler = spoiler
+
+    @property
+    def type(self) -> ComponentType:
+        return ComponentType.Thumbnail
+
+    def to_dict(self) -> ThumbnailPayload:
+        payload = {
+            'type': self.type,
+            'media': self.media
+        }
+        if self.id:
+            payload['id'] = self.id
+        if self.description:
+            payload["description"] = self.description
+        if self.spoiler:
+            payload["spoiler"] = self.spoiler
+        return payload
+
+    @classmethod
+    def from_dict(cls, data: ThumbnailPayload) -> Thumbnail:
+        return cls(
+            id=data["id"],
+            media=data["media"],
+            description=data["description"],
+            spoiler=data["spoiler"]
+        )
+
+
+class UnfurledMediaItemStructur:
+    def __init__(self, *, url: str) -> None:
+        self.url =  url
+
+        self.proxy_url: Optional[str] = None
+        self.width: Optional[int] = None
+        self.height: Optional[int] = None
+        self.content_type: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        return {'url': self.url}
+
+    @classmethod
+    def from_dict(cls, data: UnfurledMediaItemStructurPayload) -> UnfurledMediaItemStructur:
+        obj = cls(url=data["url"])
+        obj.proxy_url = data.get("proxy_url")
+        obj.width = data.get("width")
+        obj.height = data.get("height")
+        obj.content_type = data.get("content_type")
+        return obj
+
+
+class MediaGallery(BaseComponent):
+    __slots__ = ()
+
+
+class File(BaseComponent):
+    __slots__ = ()
+
+
+class Seperator(BaseComponent):
+    __slots__ = ()
+
+
+class Conatiner(BaseComponent):
+    __slots__ = ()
+
 
 def _component_factory(data: Union[ActionRowPayload, Component]) -> Union[ActionRow, BaseComponent]:
     component_type = data.get('type')
@@ -1798,3 +1962,18 @@ def _component_factory(data: Union[ActionRowPayload, Component]) -> Union[Action
         return MentionableSelect.from_dict(data)
     elif component_type == 8:
         return ChannelSelect.from_dict(data)
+    elif component_type == 9:
+        return Section.from_dict(data)
+    elif component_type == 10:
+        return TextDisplay.from_dict(data)
+    elif component_type == 11:
+        return Thumbnail.from_dict(data)
+    elif component_type == 12:
+        return MediaGallery.from_dict(data)
+    elif component_type == 13:
+        return File.from_dict(data)
+    elif component_type == 14:
+        return Seperator.from_dict(data)
+    elif component_type == 17:
+        return Container.from_dict(data)
+    return None

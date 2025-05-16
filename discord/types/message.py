@@ -240,7 +240,7 @@ class Container(TypedDict):
     spoiler: Optional[bool]
 
 
-MessageComponent = Union[Button, SelectMenu, TextInput, Section, TextDisplay, Thumbnail, MediaGallery, File, Seperator, Container]
+MessageComponent = Union[Button, SelectMenu, TextInput, Section, Seperator, Container]
 
 
 class Attachment(TypedDict):

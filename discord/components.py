@@ -1425,9 +1425,6 @@ class ActionRow(Generic[T]):
     def __init__(self, *components: Button) -> None: ...
 
     @overload
-    def __init__(self, *components: Section) -> None: ...
-
-    @overload
     def __init__(self, components: BaseSelect) -> None: ...
 
     @overload
@@ -1447,9 +1444,6 @@ class ActionRow(Generic[T]):
 
     @overload
     def __class_getitem__(cls, item: Type[Button]) -> ActionRow[Button]: ...
-
-    @overload
-    def __class_getitem__(cls, item: Type[Section]) -> ActionRow[Section]: ...
 
     @overload
     def __class_getitem__(cls, item: Tuple[Type[Button], ...]) -> ActionRow[Button, ...]: ...
@@ -1811,14 +1805,17 @@ class Section:
                  accessory: Union[Thumbnail, Button]
     ) -> None:
         if components and all(isinstance(c, TextDisplay) for c in components) and not (1 <= len(components) <= 3):
-            raise ValueError("Section must have 1 to 3 text components")
+            raise ValueError("Section must contain 1 to 3 TextDisplay components")
 
-        if accessory is None:
-            raise ValueError("accessory is required and cannot be None")
+        if not accessory:
+            raise ValueError("Section requires an accessory (e.g. Thumbnail or Button)")
 
         self.id = id
         self.components = components
         self.accessory = accessory
+
+    def __repr__(self) -> str:
+        return f'<Section components={self.components} accessory={self.accessory}>'
 
     @property
     def type(self) -> ComponentType:
@@ -1879,7 +1876,7 @@ class Thumbnail:
                  description: Optional[str] = None,
                  spoiler: Optional[bool] = False,
                  *,
-                 media: UnfurledMediaItemStructur
+                 media: Union[UnfurledMediaItemStructur, str]
     ) -> None:
         self.id = id
         self.media = media
@@ -1893,7 +1890,7 @@ class Thumbnail:
     def to_dict(self) -> ThumbnailPayload:
         payload = {
             'type': self.type,
-            'media': self.media
+            'media': self.media.to_dict() if isinstance(media, UnfurledMediaItemStructur) else self.media
         }
         if self.id:
             payload['id'] = self.id

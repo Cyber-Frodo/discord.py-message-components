@@ -62,6 +62,7 @@ from .iterators import HistoryIterator
 from .mentions import AllowedMentions
 from .permissions import PermissionOverwrite, Permissions
 from .role import Role
+from .types.message import Seperator
 from .voice_client import VoiceClient, VoiceProtocol
 
 T = TypeVar('T')
@@ -79,7 +80,7 @@ if TYPE_CHECKING:
     from .state import ConnectionState
     from .embeds import Embed
     from .sticker import GuildSticker
-    from .components import ActionRow, Button, BaseSelect
+    from .components import ActionRow, Button, BaseSelect, Section, Seperator, Container
     from .scheduled_event import GuildScheduledEvent
     from .member import Member
     from .message import Message, MessageReference
@@ -1154,7 +1155,7 @@ class Messageable:
             tts: bool = False,
             embed: Optional[Embed] = None,
             embeds: Optional[List[Embed]] = None,
-            components: Optional[List[Union[ActionRow, List[Union[Button, BaseSelect]]]]] = None,
+            components: Optional[List[Union[ActionRow, List[Union[Button, BaseSelect]], Section, Seperator, Container]]] = None,
             file: Optional[File] = None,
             files: Optional[List[File]] = None,
             stickers: Optional[List[GuildSticker]] = None,

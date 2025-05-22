@@ -2058,7 +2058,7 @@ class PartialMessage(Hashable, Generic[_MCH]):
             content: Any = MISSING,
             embed: Optional[Embed] = MISSING,
             embeds: Sequence[Embed] = MISSING,
-            components: List[Union[ActionRow, List[Union[Button, Select]]]] = MISSING,
+            components: List[Union[ActionRow, List[Union[Button, Select]], BaseComponentV2]] = MISSING,
             attachments: Sequence[Union[Attachment, File]] = MISSING,
             delete_after: Optional[float] = None,
             allowed_mentions: Optional[AllowedMentions] = MISSING,

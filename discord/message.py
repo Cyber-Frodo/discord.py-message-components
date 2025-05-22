@@ -762,7 +762,7 @@ class Message(Hashable, Generic[_MCH]):
         self.reactions: List[Reaction] = [Reaction(message=self, data=d) for d in data.get('reactions', [])]
         self.attachments: List[Attachment] = [Attachment(data=a, state=self._state) for a in data.get('attachments', [])]
         self.embeds: List[Embed] = [Embed.from_dict(a) for a in data.get('embeds', [])]
-        self.components: List[ActionRow] = [ActionRow.from_dict(d) for d in data.get('components', [])]
+        self.components: List[Union[ActionRow, List[Union[Button, BaseSelect]], BaseComponentV2]] = []
         self.application = data.get('application')  # TODO: make this a class
         self.activity = data.get('activity')  # TODO: make this a class
         self.channel: _MCH = channel

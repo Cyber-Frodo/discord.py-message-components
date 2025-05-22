@@ -52,7 +52,7 @@ from .emoji import Emoji
 from .partial_emoji import PartialEmoji
 from .enums import try_enum, MessageType, ChannelType, AutoArchiveDuration, InteractionType
 from .errors import InvalidArgument, HTTPException
-from .components import ActionRow, Button, SelectMenu
+from .components import ActionRow, Button, SelectMenu, BaseComponentV2, Section, TextDisplay, Thumbnail, MediaGallery, FileV2, Seperator, ContainerV2
 from .embeds import Embed
 from .member import Member
 from .flags import MessageFlags

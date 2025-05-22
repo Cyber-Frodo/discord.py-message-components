@@ -778,6 +778,22 @@ class Message(Hashable, Generic[_MCH]):
             Sticker(data=data, state=state) for data in data.get('sticker_items', [])
         ]
 
+        type_map = {
+            1: ActionRow,
+            9: Section,
+            10: TextDisplay,
+            12: MediaGallery,
+            13: FileV2,
+            14: Seperator,
+            17: ContainerV2,
+        }
+
+        for d in data.get('components', []):
+            comp_type = d.get('type')
+            cls = type_map.get(comp_type)
+            if cls:
+                self.components.append(cls.from_dict(d))
+
         try:
             self.guild: Optional[Guild] = channel.guild
         except AttributeError:

@@ -1744,7 +1744,7 @@ class Message(Hashable, Generic[_MCH]):
             tts: bool = False,
             embed: Optional[Embed] = None,
             embeds: Optional[List[Embed]] = None,
-            components: Optional[List[Union[ActionRow, List[Union[Button, Select]]]]] = None,
+            components: Optional[List[Union[ActionRow, List[Union[Button, Select]], BaseComponentV2]]] = None,
             file: Optional[File] = None,
             files: Optional[List[File]] = None,
             stickers: Optional[List[GuildSticker]] = None,

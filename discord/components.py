@@ -64,9 +64,10 @@ if TYPE_CHECKING:
         TextDisplay as TextDisplayPayload,
         Thumbnail as ThumbnailPayload,
         MediaGallery as MediaGalleryPayload,
+        MediaGalleryItem as MediaGalleryItemPayload,
         File as FilePayload,
         Seperator as SeperatorPayload,
-        Container as ContainerPayload,
+        ContainerV2 as ContainerPayload,
         UnfurledMediaItemStructur as UnfurledMediaItemStructurPayload
     )
     from .role import Role
@@ -96,12 +97,49 @@ __all__ = (
     'Thumbnail',
     'UnfurledMediaItemStructur',
     'MediaGallery',
-    'File',
+    'FileV2',
     'Seperator',
-    'Container'
+    'ContainerV2'
 )
 
 T = TypeVar('T')
+
+class BaseComponentV2:
+    """
+    The base class for all V2-Components.
+    """
+    def __init__(self, id: int = None) -> None:
+        self.id = int(id) if id is not None else None
+
+    def __iter__(self):
+        yield self
+
+    @property
+    def type(self) -> ComponentType:
+        """:class:`~discord.ComponentType`: The type this component is of"""
+        raise NotImplementedError()
+
+    @property
+    def id(self) -> int:
+        """
+        :class:`int`:
+
+        A developer defined ID for this componentV2. **This must be unique per** :class:`~discord.BaseComponentV2`
+        Max. 32-bit -> 10 digits long.
+        """
+        return self._id
+
+    @id.setter
+    def id(self, value: int) -> None:
+        self._id = int(value) if value is not None else None
+
+    def to_dict(self)-> Dict[str, Any]:
+        raise NotImplementedError
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> BaseComponentV2:
+        raise NotImplementedError
+
 
 class BaseComponent:
     """
@@ -208,9 +246,9 @@ class Button(BaseComponent):
         super().__init__(custom_id=custom_id, disabled=disabled)
         self.style: ButtonStyle = try_enum(ButtonStyle, style)
         if self.style.Premium and not sku_id:
-            raise InvalidArgument("An sku_id must be specified for premium buttons")
+            raise InvalidArgument('An sku_id must be specified for premium buttons')
         elif sku_id and not self.style.Premium:
-            raise InvalidArgument("sku_id can only be used with discord.ButtonStyle.premium")
+            raise InvalidArgument('sku_id can only be used with discord.ButtonStyle.premium')
         elif sku_id and any((label, custom_id, emoji, url,)):
             raise InvalidArgument('A premium button can only have parameters sku_id and (optionally) disabled')
 
@@ -232,7 +270,7 @@ class Button(BaseComponent):
         self.sku_id = sku_id
 
     def __repr__(self) -> str:
-        return f'<Button {", ".join(["%s=%s" % (k, str(v)) for k, v in self.__dict__.items()])}>'
+        return f'<Button {', '.join(['%s=%s' % (k, str(v)) for k, v in self.__dict__.items()])}>'
 
     def __len__(self):
         if self.label:
@@ -515,7 +553,7 @@ class SelectOption:
         self.default: bool = default
 
     def __repr__(self):
-        return f'<SelectOption {", ".join(["%s=%s" % (k, v) for (k, v) in self.__dict__.items()])}>'
+        return f'<SelectOption {', '.join(['%s=%s' % (k, v) for (k, v) in self.__dict__.items()])}>'
 
     def set_default(self, value: bool):
         self.default = value
@@ -746,7 +784,7 @@ class SelectMenu(BaseSelect):
         self.options = options
 
     def __repr__(self):
-        return f'<SelectMenu {", ".join(["%s=%s" % (k, v) for k, v in self.__dict__.items()])}>'
+        return f'<SelectMenu {', '.join(['%s=%s' % (k, v) for k, v in self.__dict__.items()])}>'
 
     @property
     def type(self) -> ComponentType:
@@ -768,7 +806,7 @@ class SelectMenu(BaseSelect):
             raise InvalidArgument('At least %d options must be provided and max. amount of options is 25', self.min_values)
         for index, o in enumerate(options):
             if not isinstance(o, SelectOption):
-                raise InvalidArgument("At SelectMenu.options[%d]: options must be a list of discord.SelectOption, got %s" % (index, o.__class__.__name__))
+                raise InvalidArgument('At SelectMenu.options[%d]: options must be a list of discord.SelectOption, got %s' % (index, o.__class__.__name__))
         self._options = list(options)
 
     @utils.cached_property
@@ -971,7 +1009,7 @@ class TextInput(BaseComponent):
         return self.value
     
     def __repr__(self) -> str:
-        return f'<TextInput {", ".join(["%s=%s" % (k, str(v)) for k, v in self.__dict__.items()])}>'
+        return f'<TextInput {', '.join(['%s=%s' % (k, str(v)) for k, v in self.__dict__.items()])}>'
     
     @property
     def type(self) -> ComponentType:
@@ -1797,18 +1835,18 @@ class ActionRow(Generic[T]):
         components = [_component_factory(component) for component in data.get('components', [])]
         return cls(*components)
 
-class Section:
+class Section(BaseComponentV2):
+    TYPE = ComponentType.Section
+
     def __init__(self,
                  id: Optional[int] = None,
                  *,
                  components: List[TextDisplay],
                  accessory: Union[Thumbnail, Button]
     ) -> None:
-        if components and all(isinstance(c, TextDisplay) for c in components) and not (1 <= len(components) <= 3):
-            raise ValueError("Section must contain 1 to 3 TextDisplay components")
-
-        if not accessory:
-            raise ValueError("Section requires an accessory (e.g. Thumbnail or Button)")
+        super().__init__(id)
+        if not isinstance(components, list) and components and all(isinstance(c, TextDisplay) for c in components) and not (1 <= len(components) <= 3):
+            raise ValueError('Section must contain 1 to 3 TextDisplay components')
 
         self.id = id
         self.components = components
@@ -1819,11 +1857,11 @@ class Section:
 
     @property
     def type(self) -> ComponentType:
-        return ComponentType.Section
+        return self.TYPE
 
     def to_dict(self) -> SectionPayload:
         payload = {
-            'type': self.type,
+            'type': self.type.value,
             'components': [c.to_dict() for c in self.components],
             'accessory': self.accessory.to_dict()
         }
@@ -1833,28 +1871,39 @@ class Section:
 
     @classmethod
     def from_dict(cls, data: SectionPayload) -> Section:
-        return cls(
-            id=data.get('id'),
-            components=data.get("components"),
-            accessory=data.get("accessory")
-        )
+        if data['type'] != cls.TYPE.value:
+            raise ValueError(f'Invalid type for {cls.__name__}. Expected {cls.TYPE.value}, got {data.get('type')}')
 
-class TextDisplay:
+        components = [_component_factory(component) for component in data.get('components')]
+        accessory = _component_factory(data.get('accessory'))
+
+        kwargs = {'components': components,
+                  'accessory': accessory}
+        if 'id' in data['components']:
+            kwargs['id'] = data['id']
+
+        return cls(**kwargs)
+
+
+class TextDisplay(BaseComponentV2):
+    TYPE = ComponentType.TextDisplay
+
     def __init__(self,
                  id: Optional[int] = None,
                  *,
                  content: str
     ) -> None:
+        super().__init__(id)
         self.id = id
         self.content = content
 
     @property
     def type(self) -> ComponentType:
-        return ComponentType.TextDisplay
+        return self.TYPE
 
     def to_dict(self) -> TextDisplayPayload:
         payload = {
-            'type': self.type,
+            'type': self.type.value,
             'content': self.content
         }
         if self.id:
@@ -1863,14 +1912,21 @@ class TextDisplay:
 
     @classmethod
     def from_dict(cls, data: TextDisplayPayload) -> TextDisplay:
-        content = data["content"] if data["content"] else None
-        return cls(
-            id=data.get('id'),
-            content=content,
-        )
+        if data['type'] != cls.TYPE.value:
+            raise ValueError(f'Invalid type for {cls.__name__}. Expected {cls.TYPE.value}, got {data.get('type')}')
+
+        kwargs = {
+            'content': data['content']
+        }
+        if 'id' in data:
+            kwargs['id'] = data['id']
+
+        return cls(**kwargs)
 
 
-class Thumbnail:
+class Thumbnail(BaseComponentV2):
+    TYPE = ComponentType.Thumbnail
+
     def __init__(self,
                  id: Optional[int] = None,
                  description: Optional[str] = None,
@@ -1878,6 +1934,7 @@ class Thumbnail:
                  *,
                  media: Union[UnfurledMediaItemStructur, str]
     ) -> None:
+        super().__init__(id)
         self.id = id
         self.media = media
         self.description = description
@@ -1885,29 +1942,37 @@ class Thumbnail:
 
     @property
     def type(self) -> ComponentType:
-        return ComponentType.Thumbnail
+        return self.TYPE
 
     def to_dict(self) -> ThumbnailPayload:
         payload = {
-            'type': self.type,
-            'media': self.media.to_dict() if isinstance(media, UnfurledMediaItemStructur) else self.media
+            'type': self.type.value,
+            'media': self.media.to_dict() if isinstance(self.media, UnfurledMediaItemStructur) else UnfurledMediaItemStructur(url=self.media).to_dict()
         }
         if self.id:
             payload['id'] = self.id
         if self.description:
-            payload["description"] = self.description
+            payload['description'] = self.description
         if self.spoiler:
-            payload["spoiler"] = self.spoiler
+            payload['spoiler'] = self.spoiler
         return payload
 
     @classmethod
     def from_dict(cls, data: ThumbnailPayload) -> Thumbnail:
-        return cls(
-            id=data["id"],
-            media=data["media"],
-            description=data["description"],
-            spoiler=data["spoiler"]
-        )
+        if data['type'] != cls.TYPE.value:
+            raise ValueError(f'Invalid type for {cls.__name__}. Expected {cls.TYPE.value}, got {data.get('type')}')
+
+        kwargs = {
+            'media': UnfurledMediaItemStructur.from_dict(data.get('media'))
+        }
+        if 'id' in data:
+            kwargs['id'] = data['id']
+        if 'description' in data:
+            kwargs['description'] = data['description']
+        if 'spoiler' in data:
+            kwargs['spoiler'] = data['spoiler']
+
+        return cls(**kwargs)
 
 
 class UnfurledMediaItemStructur:
@@ -1924,31 +1989,237 @@ class UnfurledMediaItemStructur:
 
     @classmethod
     def from_dict(cls, data: UnfurledMediaItemStructurPayload) -> UnfurledMediaItemStructur:
-        obj = cls(url=data["url"])
-        obj.proxy_url = data.get("proxy_url")
-        obj.width = data.get("width")
-        obj.height = data.get("height")
-        obj.content_type = data.get("content_type")
+        obj = cls(url=data['url'])
+        obj.proxy_url = data.get('proxy_url')
+        obj.width = data.get('width')
+        obj.height = data.get('height')
+        obj.content_type = data.get('content_type')
         return obj
 
 
-class MediaGallery(BaseComponent):
-    __slots__ = ()
+class Seperator(BaseComponentV2):
+    TYPE = ComponentType.Seperator
+
+    def __init__(self,
+                 id: Optional[int] = None,
+                 divider: bool = True,
+                 spacing: Literal[1, 2] = 1
+                 ) -> None:
+        super().__init__(id)
+        if not (1 <= spacing <= 2):
+            raise ValueError('Need a spacing between 1 and 2; got %s' % spacing)
+
+        self.id = id
+        self.divider = divider
+        self.spacing = spacing
+
+    def __repr__(self) -> str:
+        return f'<Seperator divider={self.divider} spacing={self.spacing}>'
+
+    @property
+    def type(self) -> ComponentType:
+        return self.TYPE
+
+    def to_dict(self) -> SeperatorPayload:
+        payload = {
+            'type': self.type.value,
+            'divider': self.divider,
+            'spacing': self.spacing
+        }
+        if self.id:
+            payload['id'] = self.id
+        return payload
+
+    @classmethod
+    def from_dict(cls, data: SeperatorPayload) -> Seperator:
+        if data['type'] != cls.TYPE.value:
+            raise ValueError(f'Invalid type for {cls.__name__}. Expected {cls.TYPE.value}, got {data.get('type')}')
+
+        kwargs = {
+            'divider': data['divider'],
+            'spacing': data['spacing']
+        }
+        if 'id' in data:
+            kwargs['id'] = data['id']
+
+        return cls(**kwargs)
 
 
-class File(BaseComponent):
-    __slots__ = ()
+class MediaGalleryItemStructure:
+    def __init__(self,
+                 description: Optional[str] = None,
+                 spoiler: bool = False,
+                 *,
+                 media: Union[UnfurledMediaItemStructur, str],
+                 ) -> None:
+        self.media = media
+        self.description = description
+        self.spoiler = spoiler
+
+    def to_dict(self) -> UnfurledMediaItemStructurPayload:
+        payload = {
+            'media': self.media.to_dict() if isinstance(self.media, UnfurledMediaItemStructur) else UnfurledMediaItemStructur(url=self.media).to_dict()
+        }
+        if self.description:
+            payload['description'] = self.description
+        if self.spoiler:
+            payload['spoiler'] = self.spoiler
+        return payload
+
+    @classmethod
+    def from_dict(cls, data: MediaGalleryItemPayload) -> MediaGalleryItemStructure:
+        kwargs = {
+            'media': UnfurledMediaItemStructur.from_dict(data.get('media'))
+        }
+        if 'description' in data:
+            kwargs['description'] = data['description']
+        if 'spoiler' in data:
+            kwargs['spoiler'] = data['spoiler']
+
+        return cls(**kwargs)
 
 
-class Seperator(BaseComponent):
-    __slots__ = ()
+class MediaGallery(BaseComponentV2):
+    TYPE = ComponentType.MediaGallery
+
+    def __init__(self,
+                 id: Optional[int] = None,
+                 *,
+                 items: List[MediaGalleryItemStructure]
+                 ) -> None:
+        super().__init__(id)
+        if not (1 <= len(items) <= 10):
+            raise ValueError('Need 1 to 10 items')
+
+        self.id = id
+        self.items = items
+
+    @property
+    def type(self) -> ComponentType:
+        return self.TYPE
+
+    def to_dict(self) -> MediaGalleryItemPayload:
+        payload = {
+            'type': self.type.value,
+            'items': [item.to_dict() for item in self.items] if all(isinstance(item, MediaGalleryItemStructure) for item in self.items) else [MediaGalleryItemStructure(media=self.items).to_dict()]
+        }
+        if self.id:
+            payload['id'] = self.id
+        return payload
+
+    @classmethod
+    def from_dict(cls, data: MediaGalleryItemPayload) -> MediaGallery:
+        if data['type'] != cls.TYPE.value:
+            raise ValueError(f'Invalid type for {cls.__name__}. Expected {cls.TYPE.value}, got {data.get('type')}')
+
+        kwargs = {
+            'items': [MediaGalleryItemStructure.from_dict(item) for item in data['items']]
+        }
+        if 'id' in data:
+            kwargs['id'] = data['id']
+
+        return cls(**kwargs)
 
 
-class Conatiner(BaseComponent):
-    __slots__ = ()
+class FileV2(BaseComponentV2):
+    TYPE = ComponentType.File
+
+    def __init__(self,
+                 id: Optional[int] = None,
+                 spoiler: bool = False,
+                 *,
+                 file: UnfurledMediaItemStructur
+                 ) -> None:
+        super().__init__(id)
+        self.id = id
+        self.spoiler = spoiler
+        self.file = file
+
+    @property
+    def type(self) -> ComponentType:
+        return self.TYPE
+
+    def to_dict(self) -> FilePayload:
+        payload = {
+            'type': self.type.value,
+            'file': self.file.to_dict() if isinstance(self.file, UnfurledMediaItemStructur) else UnfurledMediaItemStructur(url=self.file).to_dict()
+        }
+        if self.id:
+            payload['id'] = self.id
+        if self.spoiler:
+            payload['spoiler'] = self.spoiler
+        return payload
+
+    @classmethod
+    def from_dict(cls, data: FilePayload) -> FileV2:
+        if data['type'] != cls.TYPE.value:
+            raise ValueError(f'Invalid type for {cls.__name__}. Expected {cls.TYPE.value}, got {data.get('type')}')
+
+        kwargs = {
+            'file': UnfurledMediaItemStructur.from_dict(data.get('file'))
+        }
+        if 'id' in data:
+            kwargs['id'] = data['id']
+        if 'spoiler' in data:
+            kwargs['spoiler'] = data['spoiler']
+
+        return cls(**kwargs)
 
 
-def _component_factory(data: Union[ActionRowPayload, Component]) -> Union[ActionRow, BaseComponent]:
+class ContainerV2(BaseComponentV2):
+    TYPE = ComponentType.Container
+
+    def __init__(self,
+                 id: Optional[int] = None,
+                 accent_color: Optional[int] = None,
+                 spoiler: bool = False,
+                 *,
+                 components: List[ActionRow, TextDisplay, Section, MediaGallery, Seperator, FileV2]
+                 ) -> None:
+        super().__init__(id)
+        self.id = id
+        self.accent_color = accent_color
+        self.spoiler = spoiler
+        self.components = components
+
+    def __repr__(self) -> str:
+        return f'<Container components={self.components}>'
+
+    @property
+    def type(self) -> ComponentType:
+        return self.TYPE
+
+    def to_dict(self) -> ContainerPayload:
+        payload = {
+            'type': self.type.value,
+            'components': [c.to_dict() for c in self.components]
+        }
+        if self.id:
+            payload['id'] = self.id
+        if self.accent_color:
+            payload['accent_color'] = self.accent_color
+        if self.spoiler:
+            payload['spoiler'] = self.spoiler
+        return payload
+
+    @classmethod
+    def from_dict(cls, data: ContainerPayload) -> ContainerV2:
+        if data['type'] != cls.TYPE.value:
+            raise ValueError(f'Invalid type for {cls.__name__}. Expected {cls.TYPE.value}, got {data.get("type")}')
+
+        kwargs = {
+            'components': [_component_factory(component) for component in data.get('components')]
+        }
+        if 'id' in data:
+            kwargs['id'] = data['id']
+        if 'accent_color' in data:
+            kwargs['accent_color'] = data['accent_color']
+        if 'spoiler' in data:
+            kwargs['spoiler'] = data['spoiler']
+
+        return cls(**kwargs)
+
+def _component_factory(data: Union[ActionRowPayload, Component, ThumbnailPayload]) -> Union[ActionRow, BaseComponent, BaseComponentV2]:
     component_type = data.get('type')
     if component_type == 1:
         return ActionRow.from_dict(data)
@@ -1979,5 +2250,5 @@ def _component_factory(data: Union[ActionRowPayload, Component]) -> Union[Action
     elif component_type == 14:
         return Seperator.from_dict(data)
     elif component_type == 17:
-        return Container.from_dict(data)
+        return ContainerV2.from_dict(data)
     return None

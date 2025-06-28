@@ -747,6 +747,10 @@ class Client:
         for guild in guilds:
             await self._connection.chunk_guild(guild)
 
+    async def all_emojis(self):
+        data = await self.http.get_all_emojis(self.app.id)
+        return data
+
     async def fetch_soundboard_sounds(self, guild_id):
         """|coro|
 

@@ -646,7 +646,7 @@ class Message(Hashable, Generic[_MCH]):
         This is not stored long term within Discord's servers and is only used ephemerally.
     embeds: List[:class:`Embed`]
         A list of embeds the message has.
-    components: List[:class:`~discord.ActionRow`]:
+    components: List[Union[:class:`~discord.ActionRow`, :class:`~discord.Section`, :class:`~discord.Section`, :class:`~discord.TextDisplay`, :class:`~discord.MediaGallery`, :class:`~discord.FileV2`, :class:`~discord.Seperator`, :class:`~discord.ContainerV2`]]:
         A list of components the message has.
     channel: Union[:class:`abc.Messageable`, :class:`~discord.ThreadChannel`]
         The :class:`TextChannel`, :class:`~discord.ThreadChannel` or :class:`VoiceChannel` that the message was sent from.
@@ -1310,45 +1310,58 @@ class Message(Hashable, Generic[_MCH]):
             return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
 
         if self.type is MessageType.guild_application_premium_subscription:
-            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+            return f'{self.author.display_name} started a premium subscription via an application.'
 
         if self.type is MessageType.guild_incident_alert_mode_enabled:
-            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+            return f'{self.author.display_name} enabled Alert Mode for the server.'
 
         if self.type is MessageType.guild_incident_alert_mode_disabled:
-            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+            return f'{self.author.display_name} disabled Alert Mode for the server.'
 
         if self.type is MessageType.guild_incident_report_raid:
-            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+            return f'{self.author.display_name} reported a potential raid.'
 
         if self.type is MessageType.guild_incident_report_false_alarm:
-            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+            return f'{self.author.display_name} marked the incident as a false alarm.'
 
         if self.type is MessageType.purchase_notification:
-            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+            return f'{self.author.display_name} made a purchase.'
 
         if self.type is MessageType.poll_result:
-            return f'{self.author.display_name} changed Stage topic: **{self.content}**.'
+            return f'{self.author.display_name} posted poll results.'
 
         return ''
 
         # TODO: Add missing system message types
 
     @property
-    def all_components(self) -> Iterator[Union[Button, Select]]:
-        """Returns all :class:`Button`'s and :ref:`Select <select-like-objects>` like objects
-        that are contained in the message"""
-        for action_row in self.components:
-            for component in action_row:
+    def all_components(self) -> Iterator[Union[Button, Select, BaseComponentV2]]:
+        """Returns all components in the message, including :class:`Button`, :ref:`Select <select-like-objects>` and all V2 components"""
+        for components in self.components:
+            for component in components:
                 yield component
 
     @property
-    def all_buttons(self) -> Iterator[Button]:
-        """Returns all :class:`Button`'s that are contained in the message"""
-        for action_row in self.components:
-            for component in action_row:
-                if isinstance(component, Button):
-                    yield component
+    def all_buttons(self) -> Iterator[Union[Button, BaseComponentV2]]:
+        """Gibt alle Buttons zurück – egal ob direkt, in Container, accessory oder ActionRow."""
+        def traverse(components):
+            for comp in components:
+                if isinstance(comp, Button):
+                    yield comp
+
+                elif isinstance(comp, BaseComponentV2):
+                    if hasattr(comp, 'accessory') and isinstance(comp.accessory, Button):
+                        yield comp.accessory
+
+                    if hasattr(comp, 'components') and isinstance(comp.components, list):
+                        yield from traverse(comp.components)
+
+
+                elif isinstance(comp, ActionRow):
+                    if hasattr(comp, 'components') and isinstance(comp.components, list):
+                        yield from traverse(comp.components)
+
+        yield from traverse(self.components)
 
     @property
     def all_select_menus(self) -> Iterator[Select]:
@@ -1410,7 +1423,7 @@ class Message(Hashable, Generic[_MCH]):
             content: Any = MISSING,
             embed: Optional[Embed] = MISSING,
             embeds: Sequence[Embed] = MISSING,
-            components: List[Union[ActionRow, List[Union[Button, Select]]]] = MISSING,
+            components: List[Union[ActionRow, List[Union[Button, Select]], BaseComponentV2]] = MISSING,
             attachments: Sequence[Union[Attachment, File]] = MISSING,
             keep_existing_attachments: bool = False,
             delete_after: Optional[float] = None,
@@ -1503,6 +1516,13 @@ class Message(Hashable, Generic[_MCH]):
         if suppress_embeds is not MISSING:
             flags = MessageFlags._from_value(self.flags.value)
             flags.suppress_embeds = suppress_embeds
+        else:
+            flags = MISSING
+
+        if components and all(isinstance(c, BaseComponentV2) for c in components):
+            from .flags import MessageFlags
+            flags = MessageFlags._from_value(0)
+            flags.is_component_v2 = True
         else:
             flags = MISSING
 

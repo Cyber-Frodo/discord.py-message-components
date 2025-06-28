@@ -246,7 +246,7 @@ of :class:`enum.Enum`.
 
     .. attribute:: ActionRow
 
-        Container for other components
+        Container to display a row of interactive components
 
     .. attribute:: Button
 
@@ -275,6 +275,34 @@ of :class:`enum.Enum`.
     .. attribute:: ChannelSelect
 
         Select menu for channels
+
+    .. attribute:: Section
+
+        Container to display text alongside an accessory component
+
+    .. attribute:: TextDisplay
+
+        Markdown text
+
+    .. attribute:: Thumbnail
+
+        Small image that can be used as an accessory
+
+    .. attribute:: MediaGallery
+
+        Display images and other media
+
+    .. attribute:: FileV2
+
+        Displays an attached file
+
+    .. attribute:: Seperator
+
+        Component to add vertical padding between other components
+
+    .. attribute:: ContainerV2
+
+        Container that visually groups a set of components
 
 .. class:: SelectDefaultValueType
 

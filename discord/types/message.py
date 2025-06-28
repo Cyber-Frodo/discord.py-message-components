@@ -56,9 +56,9 @@ __all__ = (
     'TextDisplay',
     'Thumbnail',
     'MediaGallery',
-    'File',
+    'FileV2',
     'Seperator',
-    'Container',
+    'ContainerV2',
     'MessageComponent',
     'Attachment',
     'PartialEmoji',
@@ -126,7 +126,7 @@ ReactionType = Literal[1, 2]
 
 class ActionRow(TypedDict):
     type: Literal[1]
-    components: List[MessageComponent]
+    components: List[Union[Button, SelectMenu]]
 
 
 class Button(TypedDict):
@@ -181,7 +181,7 @@ class Section(TypedDict):
     type: Literal[9]
     id: Optional[int]
     components: List[Union[TextDisplay, Button]]
-    accessory: Union[Button]
+    accessory: Union[Thumbnail, Button]
 
 
 class TextDisplay(TypedDict):
@@ -193,7 +193,7 @@ class TextDisplay(TypedDict):
 class Thumbnail(TypedDict):
     type: Literal[11]
     id: Optional[int]
-    media: Union[UnfurledMediaItemStructur, Attachment]
+    media: UnfurledMediaItemStructur
     description: Optional[str]
     spoiler: Optional[bool]
 
@@ -218,7 +218,7 @@ class MediaGallery(TypedDict):
     items: List[MediaGalleryItem]
 
 
-class File(TypedDict):
+class FileV2(TypedDict):
     type: Literal[13]
     id: Optional[int]
     file: UnfurledMediaItemStructur
@@ -232,15 +232,15 @@ class Seperator(TypedDict):
     spacing: Optional[int]
 
 
-class Container(TypedDict):
+class ContainerV2(TypedDict):
     type: Literal[17]
     id: Optional[int]
-    components: List[MessageComponent]
+    components: List[ActionRow, TextDisplay, Section, MediaGallery, FileV2, Seperator]
     accent_color: Optional[int]
     spoiler: Optional[bool]
 
 
-MessageComponent = Union[Button, SelectMenu, TextInput, Section, Seperator, Container]
+MessageComponent = Union[Button, SelectMenu, TextInput, Section, TextDisplay, MediaGallery, FileV2, Seperator, ContainerV2]
 
 
 class Attachment(TypedDict):

@@ -46,7 +46,7 @@ from typing_extensions import Literal, Self
 
 from . import abc, utils
 from .asset import Asset
-from .components import ActionRow, BaseSelect, Button
+from .components import ActionRow, BaseSelect, Button, BaseComponentV2
 from .enums import (
     AutoArchiveDuration,
     ChannelType,
@@ -3861,7 +3861,7 @@ class ForumChannel(abc.GuildChannel, Hashable):
             content: Any = None,
             embed: Optional[Embed] = None,
             embeds: Sequence[Embed] = None,
-            components: Optional[List[Union[ActionRow, List[Union[Button, BaseSelect]]]]] = None,
+            components: Optional[List[Union[ActionRow, List[Union[Button, BaseSelect]], BaseComponentV2]]] = None,
             file: Optional[File] = None,
             files: Sequence[File] = None,
             allowed_mentions: Optional[AllowedMentions] = None,

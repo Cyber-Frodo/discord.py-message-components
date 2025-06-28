@@ -500,11 +500,11 @@ class ConnectionState:
         except asyncio.CancelledError:
             pass
         else:
+            # sync the application-commands
+            await self._get_client()._request_sync_commands()
 
             self.call_handlers('ready')
             self.dispatch('ready')
-            # sync the application-commands
-            await self._get_client()._request_sync_commands()
 
         finally:
             self._ready_task = None
@@ -1400,7 +1400,7 @@ class ConnectionState:
             log.debug('GUILD_SOUNDBOARD_SOUND_UPDATE referencing an unknown guild ID: %s. Discarding.', data['guild_id'])
 
     def parse_guild_soundboard_sound_delete(self, data):
-        print(f"parse_guild_soundboard_sound_delete: {data}")
+        #print(f"parse_guild_soundboard_sound_delete: {data}")
         guild = self._get_guild(int(data['guild_id']))
         #sound = SoundboardSound(guild=guild, data=data, state=self)
 
@@ -1675,10 +1675,11 @@ class AutoShardedConnectionState(ConnectionState):
         # clear the current task
         self._ready_task = None
 
-        self.call_handlers('ready')
-        self.dispatch('ready')
         # sync the application-commands
         await self._get_client()._request_sync_commands()
+
+        self.call_handlers('ready')
+        self.dispatch('ready')
 
     def parse_ready(self, data: gw.ReadyEvent):
         if not hasattr(self, '_ready_state'):

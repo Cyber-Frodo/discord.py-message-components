@@ -62,8 +62,8 @@ from .iterators import HistoryIterator
 from .mentions import AllowedMentions
 from .permissions import PermissionOverwrite, Permissions
 from .role import Role
-from .types.message import Seperator
 from .voice_client import VoiceClient, VoiceProtocol
+from .components import BaseComponentV2
 
 T = TypeVar('T')
 VP = TypeVar('VP', bound=VoiceProtocol)
@@ -80,7 +80,7 @@ if TYPE_CHECKING:
     from .state import ConnectionState
     from .embeds import Embed
     from .sticker import GuildSticker
-    from .components import ActionRow, Button, BaseSelect, Section, Seperator, Container
+    from .components import ActionRow, Button, BaseSelect, Section, Seperator, ContainerV2, BaseComponentV2, MediaGallery, FileV2
     from .scheduled_event import GuildScheduledEvent
     from .member import Member
     from .message import Message, MessageReference
@@ -1155,7 +1155,7 @@ class Messageable:
             tts: bool = False,
             embed: Optional[Embed] = None,
             embeds: Optional[List[Embed]] = None,
-            components: Optional[List[Union[ActionRow, List[Union[Button, BaseSelect]], Section, Seperator, Container]]] = None,
+            components: Optional[List[Union[ActionRow, List[Union[Button, BaseSelect]], BaseComponentV2]]] = None,
             file: Optional[File] = None,
             files: Optional[List[File]] = None,
             stickers: Optional[List[GuildSticker]] = None,
@@ -1288,6 +1288,13 @@ class Messageable:
             flags.suppress_embeds = suppress_embeds
             flags.suppress_notifications = suppress_notifications
             flags.is_voice_message = voice_message
+        else:
+            flags = MISSING
+
+        if components and all(isinstance(c, BaseComponentV2) for c in components):
+            from .flags import MessageFlags
+            flags = MessageFlags._from_value(0)
+            flags.is_component_v2 = True
         else:
             flags = MISSING
 

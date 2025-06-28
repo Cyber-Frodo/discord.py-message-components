@@ -49,6 +49,7 @@ from .monetization import Entitlement
 from .object import Object
 from .channel import _channel_factory, DMChannel, TextChannel, ThreadChannel, VoiceChannel, ForumPost, PartialMessageable
 from .components import *
+from .components import BaseComponentV2
 from .embeds import Embed
 from .enums import (
     ApplicationCommandType,
@@ -88,7 +89,7 @@ if TYPE_CHECKING:
     )
     from .types.message import Message as MessagePayload
     from .state import ConnectionState
-    from .components import BaseSelect
+    from .components import BaseSelect, BaseComponentV2
     from .application_commands import SlashCommandOptionChoice, SlashCommand, MessageCommand, UserCommand
 
 
@@ -194,7 +195,21 @@ class EphemeralMessage:
         self.interaction = value
 
     def _handle_components(self, value):
-        self.components = [ActionRow.from_dict(data) for data in value]
+        type_map = {
+            1: ActionRow,
+            9: Section,
+            10: TextDisplay,
+            12: MediaGallery,
+            13: FileV2,
+            14: Seperator,
+            17: ContainerV2,
+        }
+
+        for d in data.get('components', []):
+            comp_type = d.get('type')
+            cls = type_map.get(comp_type)
+            if cls:
+                self.components.append(cls.from_dict(d))
 
     def _handle_reactions(self, value):
         self.reactions = [Reaction(message=self, data=d) for d in value]
@@ -263,10 +278,10 @@ class EphemeralMessage:
 
     @property
     def all_components(self):
-        """Union[:class:`Button`, :ref:`Select <select-like-objects>`]:
-        Yields all buttons and selects that are contained in the message"""
-        for action_row in self.components:
-            yield from action_row
+        """Returns all components in the message, including :class:`Button`, :ref:`Select <select-like-objects>` and all V2 components"""
+        for components in self.components:
+            for component in components:
+                yield component
 
     @property
     def all_buttons(self):
@@ -289,7 +304,7 @@ class EphemeralMessage:
             content: Any = MISSING,
             embed: Optional[Embed] = MISSING,
             embeds: Sequence[Embed] = MISSING,
-            components: List[Union[ActionRow, List[Union[Button, BaseSelect]]]] = MISSING,
+            components: List[Union[ActionRow, List[Union[Button, BaseSelect]], BaseComponentV2]] = MISSING,
             attachments: Sequence[Union[Attachment, File]] = MISSING,
             keep_existing_attachments: bool = False,
             allowed_mentions: Optional[AllowedMentions] = MISSING,
@@ -313,9 +328,8 @@ class EphemeralMessage:
             If ``None`` or empty, all embeds will be removed.
             
             If passed, ``embed`` does also count towards the limit of 10 embeds.
-        components: List[Union[:class:`~discord.ActionRow`, List[Union[:class:`~discord.Button`, :ref:`Select <select-like-objects>`]]]]
-            A list of up to five :class:`~discord.ActionRow`s or :class:`list`,
-            each containing up to five :class:`~discord.Button` or one :ref:`Select <select-like-objects>` like object.
+        components: List[Union[:class:`~discord.ActionRow`, List[Union[:class:`~discord.Button`, :ref:`Select <select-like-objects>`]], :class:`~discord.Section`, :class:`~discord.Section`, :class:`~discord.TextDisplay`, :class:`~discord.MediaGallery`, :class:`~discord.FileV2`, :class:`~discord.Seperator`, :class:`~discord.ContainerV2`]]:
+            A list of components the message has.
         attachments: List[Union[:class:`Attachment`, :class:`File`]]
             A list containing previous attachments to keep as well as new files to upload.
             You can use ``keep_existing_attachments`` to auto-add the existing attachments to the list.
@@ -946,7 +960,7 @@ class BaseInteraction:
             tts: bool = False,
             embed: Optional[Embed] = None,
             embeds: Optional[List[Embed]] = None,
-            components: Optional[List[Union[ActionRow, List[Union[Button, BaseSelect]]]]] = None,
+            components: Optional[List[Union[ActionRow, List[Union[Button, BaseSelect]], BaseComponentV2]]] = None,
             file: Optional[File] = None,
             files: Optional[List[File]] = None,
             delete_after: Optional[float] = None,
@@ -1010,10 +1024,24 @@ class BaseInteraction:
             raise TypeError('After responding to the interaction with a modal, you can\'t respond.')
         state = self._state
 
-        flags = MessageFlags._from_value(0)
-        flags.ephemeral = hidden
-        flags.suppress_embeds = suppress_embeds
-        flags.suppress_notifications = suppress_notifications
+        if suppress_embeds or suppress_notifications or hidden:
+            from .flags import MessageFlags
+            flags = MessageFlags._from_value(0)
+            flags.suppress_embeds = suppress_embeds
+            flags.suppress_notifications = suppress_notifications
+            flags.ephemeral = hidden
+
+            is_hidden = MessageFlags._from_value(data['flags']).ephemeral
+        else:
+            is_hidden = False
+            flags = MISSING
+
+        if components and all(isinstance(c, BaseComponentV2) for c in components):
+            from .flags import MessageFlags
+            flags = MessageFlags._from_value(0)
+            flags.is_component_v2 = True
+        else:
+            flags = MISSING
 
         is_initial = False
         response_type = MISSING
@@ -1077,7 +1105,6 @@ class BaseInteraction:
 
         # We can't use the value from the params here because the message might be an edit/followup of the initial (hidden or not) response.
         # Anyway, this will be removed in the future when we switched to use the webhook message modell for interactions.
-        is_hidden = MessageFlags._from_value(data['flags']).ephemeral
         if is_hidden:
             msg = EphemeralMessage(state=self._state, channel=self.channel, data=data, interaction=self)
         else:

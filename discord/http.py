@@ -52,9 +52,8 @@ from .file import File
 from .enums import Locale
 from .gateway import DiscordClientWebSocketResponse
 from .mentions import AllowedMentions
-from .components import ActionRow, Button, BaseSelect
+from .components import ActionRow, Button, BaseSelect, Section, Seperator, ContainerV2, MediaGallery, FileV2, TextDisplay, BaseComponentV2
 from . import __version__, utils
-
 
 if TYPE_CHECKING:
     from .flags import MessageFlags
@@ -123,7 +122,7 @@ def handle_message_parameters(
         embed: Optional[Embed] = MISSING,
         embeds: Sequence[Embed] = MISSING,
         attachments: Sequence[Union[Attachment, File]] = MISSING,
-        components: List[Union[ActionRow, List[Union[Button, BaseSelect]]]] = MISSING,
+        components: List[Union[ActionRow, List[Union[Button, BaseSelect]], BaseComponentV2]] = MISSING,
         allowed_mentions: Optional[AllowedMentions] = MISSING,
         message_reference: Optional[MessageReference] = MISSING,
         stickers: Optional[SnowflakeList] = MISSING,
@@ -158,18 +157,43 @@ def handle_message_parameters(
             payload['components'] = []
         else:
             _components = []
+            action_row_count = 0
+            v2_count = 0
             for component in (list(components) if not isinstance(components, list) else components):
                 if isinstance(component, (Button, BaseSelect)):
                     _components.extend(ActionRow(component).to_dict())
+                    action_row_count += 1
                 elif isinstance(component, ActionRow):
                     _components.extend(component.to_dict())
+                    action_row_count += 1
                 elif isinstance(component, list):
-                    _components.extend(
-                        ActionRow(*[obj for obj in component]).to_dict()
-                    )
-            if len(_components) > 5:
+                    _components.extend(ActionRow(*[obj for obj in component]).to_dict())
+                    action_row_count += 1
+                elif isinstance(component, (Section, TextDisplay, MediaGallery, FileV2, Seperator)):
+                    _components.append(component.to_dict())
+                    v2_count += 1
+                elif isinstance(component, ContainerV2):
+                    container_payload = component.to_dict()
+                    flat_components = []
+                    for c in container_payload['components']:
+                        if isinstance(c, list):
+                            flat_components.extend(c)
+                        else:
+                            flat_components.append(c)
+                    if len(flat_components) > 25:
+                        raise TypeError('ContainerV2 can only have up to 25 components.')
+                    container_payload['components'] = flat_components
+                    _components.append(container_payload)
+                    v2_count += 1
+                else:
+                    raise TypeError(f"Invalid component type: {type(component)}")
+
+            if action_row_count > 5:
                 raise TypeError(f"Only can send up to 5 ActionRows per message; got {len(_components)}")
+            if v2_count > 25:
+                raise TypeError(f'Only up to 25 V2 components allowed; got {v2_count}')
             payload['components'] = _components
+            #print(payload)
 
     if nonce is not None:
         payload['nonce'] = str(nonce)
@@ -250,6 +274,7 @@ def handle_message_parameters(
                 }
             )
 
+    #print(payload)
     return MultipartParameters(payload=payload, multipart=multipart, files=files)
 
 
@@ -298,17 +323,41 @@ def handle_interaction_message_parameters(
             payload['components'] = []
         else:
             _components = []
-            for component in ([components] if not isinstance(components, list) else components):
+            action_row_count = 0
+            v2_count = 0
+            for component in (list(components) if not isinstance(components, list) else components):
                 if isinstance(component, (Button, BaseSelect)):
                     _components.extend(ActionRow(component).to_dict())
+                    action_row_count += 1
                 elif isinstance(component, ActionRow):
                     _components.extend(component.to_dict())
+                    action_row_count += 1
                 elif isinstance(component, list):
-                    _components.extend(
-                        ActionRow(*[obj for obj in component]).to_dict()
-                    )
-            if len(_components) > 5:
+                    _components.extend(ActionRow(*[obj for obj in component]).to_dict())
+                    action_row_count += 1
+                elif isinstance(component, (Section, TextDisplay, MediaGallery, FileV2, Seperator)):
+                    _components.append(component.to_dict())
+                    v2_count += 1
+                elif isinstance(component, ContainerV2):
+                    container_payload = component.to_dict()
+                    flat_components = []
+                    for c in container_payload['components']:
+                        if isinstance(c, list):
+                            flat_components.extend(c)
+                        else:
+                            flat_components.append(c)
+                    if len(flat_components) > 25:
+                        raise TypeError('ContainerV2 can only have up to 25 components.')
+                    container_payload['components'] = flat_components
+                    _components.append(container_payload)
+                    v2_count += 1
+                else:
+                    raise TypeError(f"Invalid component type: {type(component)}")
+
+            if action_row_count > 5:
                 raise TypeError(f"Only can send up to 5 ActionRows per message; got {len(_components)}")
+            if v2_count > 25:
+                raise TypeError(f'Only up to 25 V2 components allowed; got {v2_count}')
             payload['components'] = _components
 
     if nonce is not None:
@@ -367,7 +416,7 @@ def handle_interaction_message_parameters(
     payload = {'type': int(type), 'data': payload}
     if files:
         multipart.append({'name': 'payload_json', 'value': utils.to_json(payload)})
-        payload = None
+        #payload = None
         for index, file in enumerate(files):
             multipart.append(
                 {
@@ -378,6 +427,7 @@ def handle_interaction_message_parameters(
                 }
             )
 
+    print(payload)
     return MultipartParameters(payload=payload, multipart=multipart, files=files)
 
 
@@ -1657,6 +1707,11 @@ class HTTPClient:
 
     def move_member(self, user_id, guild_id, channel_id, *, reason=None):
         return self.edit_member(guild_id=guild_id, user_id=user_id, channel_id=channel_id, reason=reason)
+
+
+    async def get_all_emojis(self, application_id):
+        r = Route('GET', '/applications/{application_id}/emojis', application_id=application_id)
+        return await self.request(r)
 
     # application-command's management
     def get_application_commands(self, application_id, command_id=None, guild_id=None):

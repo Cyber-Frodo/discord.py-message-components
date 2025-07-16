@@ -1342,8 +1342,8 @@ class Message(Hashable, Generic[_MCH]):
                 yield component
 
     @property
-    def all_buttons(self) -> Iterator[Union[Button, BaseComponentV2]]:
-        """Gibt alle Buttons zurück – egal ob direkt, in Container, accessory oder ActionRow."""
+    def all_buttons(self) -> Iterator[Button]:
+        """Returns all buttons - whether direct, in container, accessory or ActionRow."""
         def traverse(components):
             for comp in components:
                 if isinstance(comp, Button):

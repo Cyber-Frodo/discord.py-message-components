@@ -783,7 +783,7 @@ class BaseInteraction:
             content: Any = MISSING,
             embed: Optional[Embed] = MISSING,
             embeds: Sequence[Embed] = MISSING,
-            components: List[Union[ActionRow, List[Union[Button, BaseSelect]]]] = MISSING,
+            components: List[Union[ActionRow, List[Union[Button, BaseSelect]], BaseComponentV2]] = MISSING,
             attachments: Sequence[Union[Attachment, File]] = MISSING,
             keep_existing_attachments: bool = False,
             delete_after: Optional[float] = None,
@@ -887,6 +887,12 @@ class BaseInteraction:
         if suppress_embeds is not MISSING:
             flags = MessageFlags._from_value(m.flags.value) if m else MessageFlags._from_value(0)
             flags.suppress_embeds = suppress_embeds
+        else:
+            flags = MISSING
+
+        if components and all(isinstance(c, BaseComponentV2) for c in components):
+            flags = MessageFlags._from_value(0)
+            flags.is_component_v2 = True
         else:
             flags = MISSING
 

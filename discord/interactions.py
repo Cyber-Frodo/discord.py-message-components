@@ -205,7 +205,8 @@ class EphemeralMessage:
             17: ContainerV2,
         }
 
-        for d in data.get('components', []):
+        self.components = []
+        for d in value:
             comp_type = d.get('type')
             cls = type_map.get(comp_type)
             if cls:
@@ -783,7 +784,7 @@ class BaseInteraction:
             content: Any = MISSING,
             embed: Optional[Embed] = MISSING,
             embeds: Sequence[Embed] = MISSING,
-            components: List[Union[ActionRow, List[Union[Button, BaseSelect]]]] = MISSING,
+            components: List[Union[ActionRow, List[Union[Button, BaseSelect]], BaseComponentV2]] = MISSING,
             attachments: Sequence[Union[Attachment, File]] = MISSING,
             keep_existing_attachments: bool = False,
             delete_after: Optional[float] = None,
@@ -883,12 +884,17 @@ class BaseInteraction:
                 response_type = InteractionCallbackType.update_msg
 
         m = self.callback_message if self.type.ApplicationCommand else self.message
-        
+
         if suppress_embeds is not MISSING:
             flags = MessageFlags._from_value(m.flags.value) if m else MessageFlags._from_value(0)
             flags.suppress_embeds = suppress_embeds
         else:
             flags = MISSING
+
+        if components and all(isinstance(c, BaseComponentV2) for c in components):
+            if flags is MISSING:
+                flags = MessageFlags._from_value(0)
+            flags.is_component_v2 = True
 
         state = self._state
         if not self.channel:
@@ -1025,23 +1031,22 @@ class BaseInteraction:
         state = self._state
 
         if suppress_embeds or suppress_notifications or hidden:
-            from .flags import MessageFlags
+            #from .flags import MessageFlags
             flags = MessageFlags._from_value(0)
             flags.suppress_embeds = suppress_embeds
             flags.suppress_notifications = suppress_notifications
             flags.ephemeral = hidden
 
-            is_hidden = MessageFlags._from_value(data['flags']).ephemeral
+            is_hidden = hidden
         else:
             is_hidden = False
             flags = MISSING
 
         if components and all(isinstance(c, BaseComponentV2) for c in components):
-            from .flags import MessageFlags
-            flags = MessageFlags._from_value(0)
+            #from .flags import MessageFlags
+            if flags is MISSING:
+                flags = MessageFlags._from_value(0)
             flags.is_component_v2 = True
-        else:
-            flags = MISSING
 
         is_initial = False
         response_type = MISSING

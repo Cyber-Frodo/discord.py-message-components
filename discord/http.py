@@ -427,7 +427,7 @@ def handle_interaction_message_parameters(
                 }
             )
 
-    print(payload)
+    #print(payload)
     return MultipartParameters(payload=payload, multipart=multipart, files=files)
 
 

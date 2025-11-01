@@ -92,7 +92,6 @@ if TYPE_CHECKING:
     from .components import BaseSelect, BaseComponentV2
     from .application_commands import SlashCommandOptionChoice, SlashCommand, MessageCommand, UserCommand
 
-
 log = logging.getLogger(__name__)
 
 __all__ = (
@@ -113,6 +112,7 @@ class EphemeralMessage:
     Like a normal :class:`~discord.Message` but with a modified :meth:`edit` method and without
     :meth:`~discord.Message.delete` method.
     """
+
     # This class will be removed in the future when we switched to use the WebhookMessage model instead
     def __init__(self, *, state, channel, data, interaction):
         self._state: ConnectionState = state
@@ -327,7 +327,7 @@ class EphemeralMessage:
         embeds: Optional[List[:class:`Embed`]]
             A list containing up to 10 embeds to send.
             If ``None`` or empty, all embeds will be removed.
-            
+
             If passed, ``embed`` does also count towards the limit of 10 embeds.
         components: List[Union[:class:`~discord.ActionRow`, List[Union[:class:`~discord.Button`, :ref:`Select <select-like-objects>`]], :class:`~discord.Section`, :class:`~discord.Section`, :class:`~discord.TextDisplay`, :class:`~discord.MediaGallery`, :class:`~discord.FileV2`, :class:`~discord.Seperator`, :class:`~discord.ContainerV2`]]:
             A list of components the message has.
@@ -490,6 +490,7 @@ class AuthorizingIntegrationOwners:
         The value will be "0" if the interaction is triggered from a DM with the app's bot user
     If the key is :attr:`~discord.AppIntegrationType.user_install`, the value will be the ID of the authorizing user
     """
+
     def __init__(self, data: AuthorizingIntegrationOwnersPayload, state: ConnectionState):
         self._data = data
 
@@ -693,7 +694,7 @@ class BaseInteraction:
         Optional[Union[:class:`Message`, :class:`EphemeralMessage`]: The initial interaction response message, if any.
         """
         return self._callback_message
-    
+
     @callback_message.setter
     def callback_message(self, value: Optional[Union[Message, EphemeralMessage]]) -> None:
         self._callback_message = value
@@ -807,7 +808,7 @@ class BaseInteraction:
         embeds: Optional[List[:class:`Embed`]]
             A list containing up to 10 embeds to send.
             If ``None`` or empty, all embeds will be removed.
-            
+
             If passed, ``embed`` does also count towards the limit of 10 embeds.
         components: List[Union[:class:`~discord.ActionRow`, List[Union[:class:`~discord.Button`, :ref:`Select <select-like-objects>`]]]]
             A list of up to five :class:`~discord.ActionRow` or :class:`list`,
@@ -823,7 +824,7 @@ class BaseInteraction:
 
         keep_existing_attachments: :class:`bool`
             Whether to auto-add existing attachments to ``attachments``, default :obj:`False`.
-            
+
             .. note::
 
                 Only needed when ``attachments`` are passed, otherwise will be ignored.
@@ -843,7 +844,7 @@ class BaseInteraction:
             to the object, otherwise it uses the attributes set in :attr:`~discord.Client.allowed_mentions`.
             If no object is passed at all then the defaults given by :attr:`~discord.Client.allowed_mentions`
             are used instead.
-        
+
         Raises
         -------
         TypeError
@@ -853,7 +854,7 @@ class BaseInteraction:
             The interaction is expired.
         HTTPException
             Editing the message failed.
-        
+
         Returns
         --------
         Union[:class:`~discord.Message`, :class:`~discord.EphemeralMessage`]
@@ -954,10 +955,10 @@ class BaseInteraction:
         if is_hidden:
             self.deferred_hidden = True
         self.deferred = True
-        
+
         if delete_after is not None:
             await msg.delete(delay=delete_after)
-        
+
         return msg
 
     async def respond(
@@ -989,7 +990,7 @@ class BaseInteraction:
             The rich embed for the content.
         embeds: List[:class:`~discord.Embed`]
             A list containing up to 10 embeds.
-            
+
             If passed, ``embed`` also counts towards the limit of 10.
         components: List[Union[:class:`~discord.ActionRow`, List[Union[:class:`~discord.Button`, :ref:`Select <select-like-objects>`]]]]
             A list of up to five :class:`~discord.ActionRow`s/:class:`list`s.
@@ -1015,7 +1016,7 @@ class BaseInteraction:
             are used instead.
         hidden: Optional[:class:`bool`]
             If :obj:`True` the message will be only visible for the performer of the interaction (e.g. :attr:`.author`).
-        
+
         Raises
         -------
         TypeError
@@ -1031,7 +1032,7 @@ class BaseInteraction:
         state = self._state
 
         if suppress_embeds or suppress_notifications or hidden:
-            #from .flags import MessageFlags
+            # from .flags import MessageFlags
             flags = MessageFlags._from_value(0)
             flags.suppress_embeds = suppress_embeds
             flags.suppress_notifications = suppress_notifications
@@ -1043,7 +1044,7 @@ class BaseInteraction:
             flags = MISSING
 
         if components and all(isinstance(c, BaseComponentV2) for c in components):
-            #from .flags import MessageFlags
+            # from .flags import MessageFlags
             if flags is MISSING:
                 flags = MessageFlags._from_value(0)
             flags.is_component_v2 = True
@@ -1115,7 +1116,6 @@ class BaseInteraction:
         else:
             msg = Message(state=self._state, channel=self.channel, data=data)
 
-        
         if not self.callback_message or is_initial:
             self.callback_message = msg
         else:
@@ -1136,7 +1136,7 @@ class BaseInteraction:
         ----------
         modal: :class:`~discord.Modal`
             The modal to send.
-        
+
         Raises
         -------
         AlreadyResponded
@@ -1168,7 +1168,7 @@ class BaseInteraction:
         ----------
         raw: Optional[:class:`bool`]
             Whether to return the raw data from the api instead of a :class:`~discord.Message`/:class:`EphemeralMessage`.
-        
+
         Returns
         -------
         Union[:class:`~discord.Message`,:class:`EphemeralMessage`], :class:`dict`]
@@ -1337,14 +1337,14 @@ class ApplicationCommandInteraction(BaseInteraction):
         ----------
         hidden: Optional[:class:`bool`]
             Weather only the author of the command should see this
-        
+
         Raises
         ------
         AlreadyResponded
             The interaction has already been responded to.
         UnknownInteraction
             The interaction has expired.
-        
+
         Returns
         -------
         Union[:class:`~discord.Message, :class:`~discord.EphemeralMessage`]:
@@ -1458,14 +1458,14 @@ class ComponentInteraction(BaseInteraction):
 
              .. note::
                 Only for :attr:`~discord.InteractionCallbackType.deferred_msg_with_source` (``5``).
-        
+
         Raises
         ------
         AlreadyResponded
             The interaction has already been responded to.
         UnknownInteraction
             The interaction has expired.
-        
+
         Returns
         -------
         Optional[Union[:class:`~discord.Message, :class:`~discord.EphemeralMessage`]]:
@@ -1625,10 +1625,12 @@ class ModalSubmitInteraction(BaseInteraction):
         match: Optional[Match]
 
     @overload
-    def get_field(self, custom_id: str) -> Optional[TextInput]: ...
+    def get_field(self, custom_id: str) -> Optional[TextInput]:
+        ...
 
     @overload
-    def get_field(self, custom_id: re.Pattern) -> Optional[Tuple[TextInput, Match]]: ...
+    def get_field(self, custom_id: re.Pattern) -> Optional[Tuple[TextInput, Match]]:
+        ...
 
     def get_field(self, custom_id: Union[str, re.Pattern]) -> Optional[Union[TextInput, Tuple[TextInput, Match]]]:
         """
@@ -1697,14 +1699,14 @@ class ModalSubmitInteraction(BaseInteraction):
         ----------
         hidden: Optional[:class:`bool`]
             Weather only the author of the modal should see this
-        
+
         Raises
         ------
         AlreadyResponded
             The interaction has already been responded to.
         UnknownInteraction
             The interaction has expired.
-        
+
         Returns
         -------
         Union[:class:`~discord.Message, :class:`~discord.EphemeralMessage`]:

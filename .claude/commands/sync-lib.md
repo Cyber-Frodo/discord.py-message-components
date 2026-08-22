@@ -5,7 +5,7 @@ allowed-tools: Read, Write, Edit, Glob, Grep, Bash(py:*), Bash(git:*), Bash(gh:*
 
 # /sync-lib — Fork-Doku auf den Stand des Codes bringen
 
-Für [[Discord-Lib]] — den eigenen Fork von
+Für [[Discord-Lib - Projekt|Discord-Lib]] — den eigenen Fork von
 `mccoderpy/discord.py-message-components`.
 
 > [!important] Dieses Projekt hat **drei** Stände, und sie driften

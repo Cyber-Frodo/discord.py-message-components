@@ -1,28 +1,25 @@
-discord.py-message-components — eigener Fork
-============================================
+discord.py-message-components — personal fork
+=============================================
 
-*A personal fork of* `mccoderpy/discord.py-message-components <https://github.com/mccoderpy/discord.py-message-components>`_
-*with Components V2, Soundboard and DAVE voice support. Documentation is in German.*
-
-Fork von `mccoderpy/discord.py-message-components <https://github.com/mccoderpy/discord.py-message-components>`_
-mit eigenen Erweiterungen. Diese Datei beschreibt **nur**, was hier anders
-ist — alles Übrige steht in der `Original-Dokumentation
+Fork of `mccoderpy/discord.py-message-components <https://github.com/mccoderpy/discord.py-message-components>`_
+with additional features. This file documents **only** what differs here —
+everything else is covered by the `upstream documentation
 <https://discordpy-message-components.readthedocs.io/en/developer/>`_.
 
 .. warning::
 
-    **Nicht vom Original installieren.** Der Befehl aus der Original-README
+    **Do not install from upstream.** The command in the upstream README
 
     .. code:: sh
 
         py -m pip install -U git+https://github.com/mccoderpy/discord.py-message-components.git@developer
 
-    installiert die Ursprungsfassung und **entfernt damit alle Erweiterungen
-    dieses Forks** — Components V2, Soundboard, DAVE. Bots, die darauf
-    aufbauen, brechen dann mit ``AttributeError``.
+    installs the original version and therefore **removes every addition made
+    in this fork** — Components V2, Soundboard, DAVE. Bots relying on those
+    break with ``AttributeError``.
 
-    Am 22.08.2026 nachgemessen: Auf dem Haupt-PC lag genau deshalb die
-    Ursprungsfassung, ohne ``ContainerV2`` und ohne ``SoundboardSound``.
+    That is not hypothetical. On 2026-08-22 the main workstation had exactly
+    that state, verified with ``hasattr(discord, 'ContainerV2') -> False``.
 
 Installation
 ------------
@@ -35,92 +32,92 @@ Installation
     # Linux / Raspberry Pi
     python3 -m pip install -U "git+https://github.com/Cyber-Frodo/discord.py-message-components.git@developer-new-features"
 
-Mit Sprachunterstützung (siehe ``docs/eigenbau/voice-dave.md``):
+With voice support (see ``docs/extras/voice-dave.md``):
 
 .. code:: sh
 
     py -m pip install -U "discord.py-message-components[voice] @ git+https://github.com/Cyber-Frodo/discord.py-message-components.git@dave-support"
 
-Das ``voice``-Extra zieht ``PyNaCl>=1.5.0,<1.6`` und ``davey>=0.1.6``.
-Beide sind zwingend: Discord verlangt seit dem **02.03.2026** DAVE-
-Verschlüsselung, und ``nacl.secret.Aead`` gibt es erst ab PyNaCl 1.5.0.
+The ``voice`` extra pulls ``PyNaCl>=1.5.0,<1.6`` and ``davey>=0.1.6``. Both
+bounds are mandatory: Discord has required DAVE encryption since
+**2026-03-02**, and ``nacl.secret.Aead`` only exists from PyNaCl 1.5.0
+onward.
 
 .. note::
 
-    Diese Bibliothek überschreibt ``import discord``. Ein zuvor installiertes
-    ``discord.py`` vorher entfernen:
+    This library overrides ``import discord``. Remove a previously installed
+    ``discord.py`` first:
 
     .. code:: sh
 
         py -m pip uninstall discord.py
 
-Was dieser Fork zusätzlich kann
--------------------------------
+What this fork adds
+-------------------
 
-Stand 22.08.2026: **39 eigene Commits, 1 660 Zeilen in 23 Dateien**,
-abgezweigt von ``upstream/developer`` (``847d53f``, 23.04.2025).
+As of 2026-08-22: **39 own commits, 1,660 lines across 23 files**, forked
+from ``upstream/developer`` (``847d53f``, 2025-04-23).
 
 +----------------------+----------------------------------------------------------+------------------------+
-| Bereich              | Inhalt                                                   | Doku                   |
+| Area                 | Contents                                                 | Docs                   |
 +======================+==========================================================+========================+
-| **Components V2**    | 10 Klassen: ``ContainerV2``, ``Section``,                | ``docs/eigenbau/``     |
+| **Components V2**    | 10 classes: ``ContainerV2``, ``Section``,                | ``docs/extras/``       |
 |                      | ``TextDisplay``, ``Thumbnail``, ``MediaGallery``,        | ``components-v2.md``   |
-|                      | ``FileV2``, ``Seperator``, ``Modal`` u. a.               |                        |
+|                      | ``FileV2``, ``Seperator``, ``Modal`` and more            |                        |
 +----------------------+----------------------------------------------------------+------------------------+
-| **Soundboard**       | ``SoundboardSound``, sechs ``Guild``-Methoden,           | ``docs/eigenbau/``     |
-|                      | automatisches Kürzen auf 5 s / 512 KB                    | ``soundboard.md``      |
+| **Soundboard**       | ``SoundboardSound``, six ``Guild`` methods,              | ``docs/extras/``       |
+|                      | automatic trimming to 5 s / 512 KB                       | ``soundboard.md``      |
 +----------------------+----------------------------------------------------------+------------------------+
-| **Voice mit DAVE**   | ``aead_xchacha20_poly1305_rtpsize``, MLS über ``davey``, | ``docs/eigenbau/``     |
-|                      | Voice-Gateway v8 — Empfang funktioniert wieder           | ``voice-dave.md``      |
+| **Voice with DAVE**  | ``aead_xchacha20_poly1305_rtpsize``, MLS via ``davey``,  | ``docs/extras/``       |
+|                      | voice gateway v8 — receiving works again                 | ``voice-dave.md``      |
 +----------------------+----------------------------------------------------------+------------------------+
-| **Flags und Enums**  | ``is_component_v2``, ``has_snapshot``, neue              | ``docs/eigenbau/``     |
-|                      | Nachrichtentypen, Anwendungs-Emojis                      | ``flags-und-enums.md`` |
+| **Flags and enums**  | ``is_component_v2``, ``has_snapshot``, new message       | ``docs/extras/``       |
+|                      | types, application emojis                                | ``flags-and-enums.md`` |
 +----------------------+----------------------------------------------------------+------------------------+
 
-Ausführlich: `docs/eigenbau/README.md <docs/eigenbau/README.md>`_
+Full details: `docs/extras/README.md <docs/extras/README.md>`_
 
-Zwei Fallen vorweg
-------------------
+Two pitfalls up front
+---------------------
 
 .. warning::
 
-    **1. ``Seperator`` ist falsch geschrieben** — ein „a" fehlt.
-    ``discord.Separator`` gibt es nicht und liefert ``AttributeError``.
-    Der Tippfehler bleibt bewusst stehen: Ihn zu korrigieren würde jeden
-    bestehenden Aufruf brechen.
+    **1. ``Seperator`` is misspelled** — one ``a`` is missing.
+    ``discord.Separator`` does not exist and raises ``AttributeError``. The
+    typo stays on purpose: fixing it would break every existing call.
 
-    **2. ``import discord`` braucht pydub.** ``soundboard.py`` importiert es
-    auf Modulebene, und ``guild.py`` importiert ``soundboard``. Damit hängt
-    der Import der ganzen Bibliothek daran, auch wenn kein Sound im Spiel
-    ist. ``pydub`` ruft seinerseits **ffmpeg** auf.
+    **2. ``import discord`` requires pydub.** ``soundboard.py`` imports it at
+    module level and ``guild.py`` imports ``soundboard``, so importing the
+    whole library depends on it even when no sound is involved. ``pydub`` in
+    turn shells out to **ffmpeg**.
 
 Branches
 --------
 
 +------------------------------+------------------------------------------------------+
-| ``developer-new-features``   | Hauptzweig dieses Forks — Components V2, Soundboard  |
+| ``developer-new-features``   | main branch of this fork — Components V2, Soundboard |
 +------------------------------+------------------------------------------------------+
-| ``dave-support``             | zusätzlich Sprachunterstützung mit DAVE              |
+| ``dave-support``             | additionally voice support with DAVE                 |
 +------------------------------+------------------------------------------------------+
 
-Beispiele
----------
+Examples
+--------
 
-Im Ordner `examples <examples>`_ sowie in der `Original-Dokumentation
+See the `examples <examples>`_ folder and the `upstream documentation
 <https://discordpy-message-components.readthedocs.io/en/developer/>`_.
 
-Für die **eigenen** Erweiterungen stehen vollständige Beispiele in
-``docs/eigenbau/`` — darunter ein Components-V2-Aufbau aus dem laufenden
-Betrieb.
+For the **additions** of this fork, complete examples live in
+``docs/extras/`` — including a Components V2 layout taken from production
+code.
 
-Herkunft und Lizenz
+Credits and license
 -------------------
 
-Dieser Fork basiert auf
+This fork is based on
 `mccoderpy/discord.py-message-components <https://github.com/mccoderpy/discord.py-message-components>`_,
-das seinerseits auf `discord.py <https://github.com/Rapptz/discord.py>`_ von
-Rapptz aufbaut. Lizenz unverändert: **MIT** (siehe ``LICENSE``).
+which itself builds on `discord.py <https://github.com/Rapptz/discord.py>`_
+by Rapptz. License unchanged: **MIT** (see ``LICENSE``).
 
-Fehlerberichte zum **Ursprungsprojekt** gehören dorthin, nicht hierher:
-`Issues bei mccoderpy <https://github.com/mccoderpy/discord.py-message-components/issues>`_
-· `Support-Server <https://discord.gg/sb69muSqsg>`_
+Bug reports about the **upstream project** belong there, not here:
+`upstream issues <https://github.com/mccoderpy/discord.py-message-components/issues>`_
+· `support server <https://discord.gg/sb69muSqsg>`_

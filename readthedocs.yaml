@@ -1,13 +1,21 @@
-# File: .readthedocs.yaml
-
+# Read the Docs build configuration.
+# Reference: https://docs.readthedocs.io/en/stable/config-file/v2.html
 
 version: 2
 
 build:
-  os: ubuntu-22.04
+  os: ubuntu-24.04
   tools:
-    python: "3.10"  
-    
+    # Raised from 3.10 to 3.12 on 2026-08-22.
+    #
+    # The documentation requirements have outgrown 3.10: Sphinx 9.x needs
+    # >=3.12, myst-parser 5.x and sphinx-autobuild need >=3.11. On 3.10 pip
+    # silently resolves to older releases instead, so Read the Docs would
+    # build with a different toolchain than a local check does - the classic
+    # "works on my machine" gap, except in the direction nobody looks.
+    #
+    # ubuntu-24.04 comes along because it is the image that ships 3.12.
+    python: "3.12"
 
 sphinx:
   configuration: docs/conf.py

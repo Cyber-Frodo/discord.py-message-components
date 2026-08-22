@@ -93,6 +93,21 @@ If you're having trouble with something, these resources might help.
 - Report bugs in the :resource:`issue tracker <issues>`.
 - Ask in our :resource:`GitHub discussions page <discussions>`.
 
+Eigenbau dieses Forks
+---------------------
+
+Was dieser Fork zusätzlich kann — Components V2, Soundboard, Voice mit DAVE.
+Auf Deutsch, weil es Arbeitsdokumentation ist.
+
+.. toctree::
+  :maxdepth: 1
+
+  Übersicht <eigenbau/README.md>
+  eigenbau/components-v2.md
+  eigenbau/soundboard.md
+  eigenbau/voice-dave.md
+  eigenbau/flags-und-enums.md
+
 Extensions
 ------------
 

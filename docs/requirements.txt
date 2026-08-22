@@ -1,15 +1,35 @@
-sphinx
-sphinx-autobuild
+# Documentation build requirements.
+#
+# Upper bounds added on 2026-08-22. Sphinx and myst-parser were unpinned, so
+# a future major release would land in the next Read the Docs build without
+# anyone changing a line here - and the failure would show up as "the docs
+# broke by themselves". The bounds below allow patch and minor updates and
+# stop at the next major version.
+#
+# Requires Python >= 3.12, which is why readthedocs.yaml pins that version:
+# sphinx 9.x needs >=3.12, myst-parser 5.x needs >=3.11.
+sphinx>=9.1,<10
+myst-parser>=5.1,<6
+sphinx-autobuild>=2025.8,<2027
+
+# Sphinx extensions used by conf.py. contentui is pinned exactly because it
+# has been unmaintained since 2020 and only works with specific releases.
 sphinxcontrib-contentui==0.2.5
 sphinxcontrib-websupport
 sphinxcontrib-trio
 sphinxext-opengraph
 sphinx_inline_tabs
+
+# Needed because conf.py imports the library itself for autodoc.
 Jinja2>0.3
 pygments
 typing-extensions
 aiohttp>=3.9.1,<4
 colorama
 color-pprint
+
+# pydub is not a documentation dependency in spirit - it is pulled in
+# because soundboard.py imports it at module level and guild.py imports
+# soundboard, so `import discord` fails without it. See
+# docs/extras/soundboard.md.
 pydub
-myst-parser

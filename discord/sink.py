@@ -80,14 +80,16 @@ class Filters:
 class RawData:
     """Handles raw data from Discord so that it can be decrypted and decoded to be used.
 
-    Zerlegt ein empfangenes RTP-Paket und entschluesselt es mit dem Verfahren,
-    auf das sich der Client mit Discord geeinigt hat.
+    Splits a received RTP packet apart and decrypts it with whatever mode the
+    client negotiated with Discord.
 
-    ⚠ **Die Zerlegung haengt vom Verfahren ab.** Bei den ``_rtpsize``-Modi
-    (seit 18.11.2024 Pflicht) bleiben mehr Teile unverschluesselt als vorher:
-    Nonce, CSRC-Liste und die Praeambel der Header-Erweiterung. Sie werden
-    hier abgetrennt, **bevor** entschluesselt wird — die Verfahren selbst
-    bekommen nur noch fertige Bloecke.
+    .. warning::
+
+        How the packet is split depends on the mode. With the ``_rtpsize``
+        modes (mandatory since 2024-11-18) more parts stay unencrypted than
+        before: the nonce, the CSRC list and the extension header preamble.
+        They are stripped here **before** decryption - the cipher methods
+        only ever see finished blocks.
     """
 
     def __init__(self, data, client):
@@ -100,62 +102,61 @@ class RawData:
         unpacker = struct.Struct('>xxHII')
         self.sequence, self.timestamp, self.ssrc = unpacker.unpack_from(self.header)
 
-        # Erstes Byte des RTP-Kopfes: die unteren 4 Bit zaehlen die
-        # CSRC-Eintraege, Bit 4 (0x10) meldet eine Header-Erweiterung.
-        # Discord setzt die Erweiterung regelmaessig — wer sie ignoriert,
-        # bekommt beim Dekodieren Rauschen statt Sprache.
+        # First byte of the RTP header: the lower 4 bits count the CSRC
+        # entries, bit 4 (0x10) signals a header extension. Discord sets the
+        # extension regularly - ignoring it yields noise instead of speech.
         self.cc = data[0] & 0x0F
         self.extended = bool(data[0] & 0x10)
 
-        # Wieviele Bytes der Erweiterungsblock nach dem Entschluesseln
-        # einnimmt. Wird von `_rtpsize` gesetzt und in `unpack_audio` gebraucht.
+        # How many bytes the extension block occupies after decryption. Set
+        # by `_split_rtpsize` and used further down.
         self.ext_offset = 0
 
         if self.cc:
-            # Jeder CSRC-Eintrag ist 4 Byte lang und gehoert zum Kopf,
-            # nicht zu den Nutzdaten.
-            laenge = self.cc * 4
-            self.header = data[:12 + laenge]
-            self.data = self.data[laenge:]
+            # Each CSRC entry is 4 bytes and belongs to the header, not to
+            # the payload.
+            length = self.cc * 4
+            self.header = data[:12 + length]
+            self.data = self.data[length:]
 
         if self.client.mode.startswith('aead_'):
-            self._rtpsize_aufteilen()
+            self._split_rtpsize()
 
         self.decrypted_data = getattr(self.client, '_decrypt_' + self.client.mode)(self.header, self.data)
 
         if self.ext_offset:
-            # Der Erweiterungsblock lag mit im Geheimtext und ist kein Audio.
+            # The extension block travelled inside the ciphertext and is not
+            # audio.
             self.decrypted_data = self.decrypted_data[self.ext_offset:]
 
         self.decoded_data = None
 
         self.user_id = None
 
-    def _rtpsize_aufteilen(self) -> None:
-        """Kopf und Nutzdaten fuer die ``_rtpsize``-Verfahren zurechtschneiden.
+    def _split_rtpsize(self) -> None:
+        """Trim header and payload for the ``_rtpsize`` modes.
 
-        Diese Verfahren sind an SRTP angelehnt: Die **Praeambel** der
-        Header-Erweiterung (4 Byte: Profil-Kennung plus Laengenangabe) bleibt
-        unverschluesselt und zaehlt zum authentifizierten Kopf. Die
-        Erweiterungs-**Daten** dagegen liegen im Geheimtext und muessen nach
-        dem Entschluesseln uebersprungen werden.
+        These modes follow SRTP: the **preamble** of the header extension
+        (4 bytes: profile id plus length) stays unencrypted and counts towards
+        the authenticated header. The extension **data**, in contrast, lives
+        inside the ciphertext and has to be skipped after decryption.
 
-        Setzt ``self.header``, ``self.data`` und ``self.ext_offset``.
+        Sets ``self.header``, ``self.data`` and ``self.ext_offset``.
         """
         if not self.extended:
-            # Ohne Erweiterung bleibt nur die Nonce am Ende — die schneidet
-            # das Entschluesselungsverfahren selbst ab.
+            # Without an extension only the nonce trails the payload, and the
+            # cipher method strips that itself.
             return
 
-        # Praeambel in den Kopf verschieben ...
-        praeambel = self.data[:4]
-        self.header = bytes(self.header) + bytes(praeambel)
+        # Move the preamble into the header ...
+        preamble = self.data[:4]
+        self.header = bytes(self.header) + bytes(preamble)
         self.data = self.data[4:]
 
-        # ... und merken, wieviel davon nach dem Entschluesseln im Klartext
-        # noch zu ueberspringen ist. Die Laenge zaehlt in 32-Bit-Woertern.
-        _, wortanzahl = struct.unpack_from('>HH', praeambel)
-        self.ext_offset = wortanzahl * 4
+        # ... and remember how much of the plaintext has to be skipped after
+        # decryption. The length counts 32-bit words.
+        _, word_count = struct.unpack_from('>HH', preamble)
+        self.ext_offset = word_count * 4
 
 
 class AudioData:

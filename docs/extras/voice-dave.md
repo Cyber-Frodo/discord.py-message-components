@@ -136,7 +136,7 @@ vc.dave_session.voice_privacy_code
 ## What is measured — and what is not
 
 > **Measured: the encryption, 4 of 4.**
-> `pruefe_krypto.py` runs **against the production code**, not against a
+> `test_encryption.py` runs **against the production code**, not against a
 > reimplementation:
 >
 > | Case | |
@@ -148,11 +148,11 @@ vc.dave_session.voice_privacy_code
 
 > **NOT measured: the connection against live Discord.**
 > Whether the MLS negotiation completes cannot be shown by a desk test.
-> `pruefe_voice_empfang.py` is included for that:
+> `test_voice_receive.py` is included for that:
 >
 > ```bash
 > export DISCORD_TOKEN='...'
-> py pruefe_voice_empfang.py <voice-channel-id>
+> py test_voice_receive.py <voice-channel-id>
 > ```
 >
 > **The proof is a WAV file larger than 44 bytes** — 44 bytes is an empty

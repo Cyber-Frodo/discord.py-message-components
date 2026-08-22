@@ -77,15 +77,14 @@ try:
 except ImportError:
     has_nacl = False
 
-# DAVE (Discord Audio & Video End-to-End Encryption) — seit dem 02.03.2026
-# Pflicht fuer alle Nicht-Stage-Sprachkanaele. Ohne DAVE lehnt der
-# Voice-Gateway die Verbindung mit Close-Code 4017 ab, noch bevor ein
-# einziges Audiopaket fliesst.
+# DAVE (Discord Audio & Video End-to-End Encryption) has been mandatory for
+# every non-stage voice channel since 2026-03-02. Without it the voice
+# gateway rejects the connection with close code 4017, before a single audio
+# packet is sent.
 #
-# Das Paket ist bewusst OPTIONAL eingebunden: Wer die Bibliothek nur fuer
-# Text-Befehle nutzt, soll sie ohne zusaetzliche Abhaengigkeit installieren
-# koennen. Fehlt es, scheitert erst der Verbindungsversuch — mit einer
-# Meldung, die sagt, was zu tun ist.
+# The import is deliberately optional: anyone using this library for text
+# commands only should not be forced to install it. When it is missing, the
+# failure happens at connect time - with a message that says what to do.
 try:
     import davey
     has_dave = True
@@ -337,12 +336,12 @@ class VoiceClient(VoiceProtocol):
         self._lite_nonce = 0
         self.ws: DiscordVoiceWebSocket = None
 
-        # ── DAVE ──────────────────────────────────────────────────────────
-        # `dave_session` bleibt None, solange Discord keine DAVE-Version
-        # ausgehandelt hat (Stage-Kanaele). Alles Weitere prueft darauf.
+        # --- DAVE ---
+        # `dave_session` stays None while Discord has not negotiated a DAVE
+        # version (stage channels). Everything else checks against it.
         self.dave_session = None
         self.dave_protocol_version = 0
-        # Uebergaenge, die angekuendigt, aber noch nicht ausgefuehrt sind:
+        # Transitions announced but not yet executed:
         # {transition_id: protocol_version}
         self.dave_pending_transitions = {}
 
@@ -355,16 +354,15 @@ class VoiceClient(VoiceProtocol):
 
     warn_nacl = not has_nacl
     warn_dave = not has_dave
-    # ⚠ **Reihenfolge ist keine Geschmacksfrage.** Discord bietet in
-    #   `initial_connection` eine Liste an; genommen wird der erste Eintrag,
-    #   der hier ebenfalls vorkommt. Der neue Modus muss deshalb oben stehen.
+    # NOTE: the order matters. Discord offers a list of modes in
+    # `initial_connection`; we pick the first entry that also appears here,
+    # so the current mode has to come first.
     #
-    #   Die drei `xsalsa20`-Varianten hat Discord am **18.11.2024**
-    #   abgeschaltet. Sie bleiben nur als Rueckfallebene stehen, falls ein
-    #   Server sie doch noch anbietet — in der Praxis passiert das nicht
-    #   mehr. Vor dem 18.11.2024 waren sie der Normalfall; genau deshalb
-    #   funktionierte `recv_audio()` frueher und danach nicht mehr, ohne
-    #   dass sich an dieser Bibliothek etwas geaendert haette.
+    # Discord removed the three `xsalsa20` variants on 2024-11-18. They are
+    # kept only as a fallback in case a server still offers them, which no
+    # longer happens in practice. Before that date they were the normal case
+    # - which is exactly why `recv_audio()` used to work and then stopped,
+    # without anything changing in this library.
     supported_modes = (
         'aead_xchacha20_poly1305_rtpsize',
         'xsalsa20_poly1305_lite',
@@ -640,10 +638,10 @@ class VoiceClient(VoiceProtocol):
         struct.pack_into('>I', header, 4, self.timestamp)
         struct.pack_into('>I', header, 8, self.ssrc)
 
-        # ── DAVE: zuerst die Ende-zu-Ende-Schicht ─────────────────────────
-        # Reihenfolge spiegelt den Empfang: DAVE innen, Transport aussen.
-        # Discord verschluesselt jeden Opus-Rahmen einzeln mit dem eigenen
-        # Sender-Schluessel; der Transport kommt danach obendrauf.
+        # --- DAVE: end-to-end layer goes first ---
+        # Mirrors the receive path: DAVE inside, transport outside. Discord
+        # encrypts every Opus frame individually with the sender's own key;
+        # the transport layer is applied on top of that.
         if self.dave_session is not None and self.dave_protocol_version > 0:
             data = self.dave_session.encrypt_opus(bytes(data))
 
@@ -651,56 +649,59 @@ class VoiceClient(VoiceProtocol):
         return encrypt_packet(header, data)
 
     def _encrypt_aead_xchacha20_poly1305_rtpsize(self, header, data):
-        """Ein Paket im Modus ``aead_xchacha20_poly1305_rtpsize`` verschluesseln.
+        """Encrypt a packet using ``aead_xchacha20_poly1305_rtpsize``.
 
-        Seit dem 18.11.2024 der Pflichtmodus (neben dem optionalen
-        ``aead_aes256_gcm_rtpsize``).
+        The mandatory transport mode since 2024-11-18, alongside the optional
+        ``aead_aes256_gcm_rtpsize``.
 
-        Aufbau des fertigen Pakets::
+        Layout of the resulting packet::
 
-            [ RTP-Header 12 B ][ Ciphertext + Poly1305-Tag ][ Nonce 4 B ]
+            [ RTP header 12 B ][ ciphertext + Poly1305 tag ][ nonce 4 B ]
 
-        Der RTP-Header geht als **Additional Authenticated Data** mit ein:
-        Er bleibt lesbar, ist aber gegen Veraenderung geschuetzt. Genau das
-        unterscheidet den Modus von ``_lite``.
+        The RTP header is passed as **additional authenticated data**: it
+        stays readable but is protected against tampering. That is what
+        separates this mode from ``_lite``.
 
-        :param header: Der 12-Byte-RTP-Header (dient zugleich als AAD).
-        :param data: Die zu verschluesselnden Opus-Daten.
-        :return: Das versandfertige Paket als ``bytes``.
+        :param header: the 12-byte RTP header, also used as AAD.
+        :param data: the Opus payload to encrypt.
+        :return: the packet ready to be sent, as ``bytes``.
         """
         box = nacl.secret.Aead(bytes(self.secret_key))
         nonce = bytearray(24)
 
-        # Nur die ersten 4 Byte der Nonce werden uebertragen, der Rest
-        # bleibt null. Der Zaehler laeuft bei 2^32-1 ueber — `checked_add`
-        # setzt ihn dann zurueck, statt eine Ausnahme zu werfen.
+        # Only the first 4 bytes of the nonce are transmitted, the rest stays
+        # zero. The counter wraps at 2^32-1 - `checked_add` resets it instead
+        # of raising.
         nonce[:4] = struct.pack('>I', self._lite_nonce)
         self.checked_add('_lite_nonce', 1, 4294967295)
 
         return header + box.encrypt(bytes(data), bytes(header), bytes(nonce)).ciphertext + nonce[:4]
 
     def _decrypt_aead_xchacha20_poly1305_rtpsize(self, header, data):
-        """Ein empfangenes Paket im Modus ``aead_xchacha20_poly1305_rtpsize`` entschluesseln.
+        """Decrypt a packet encrypted with ``aead_xchacha20_poly1305_rtpsize``.
 
-        Gegenstueck zu :meth:`_encrypt_aead_xchacha20_poly1305_rtpsize`.
+        Counterpart to :meth:`_encrypt_aead_xchacha20_poly1305_rtpsize`.
 
-        ⚠ **Die Nonce steht am Ende von ``data`` und wird hier abgeschnitten** —
-        sie darf **nicht** am Client zwischengespeichert werden. ``recv_audio()``
-        laeuft in einem eigenen Thread und verarbeitet die Pakete mehrerer
-        Sprecher; ein Nonce-Feld am Objekt waere eine Race Condition, die sich
-        als sporadisches Rauschen zeigt und praktisch nicht zu finden ist.
+        .. warning::
 
-        ⚠ **Die CSRC-Liste und die Erweiterungs-Praeambel hat ``RawData``
-        bereits behandelt.** Bei ``_rtpsize``-Modi gehoert die 4-Byte-Praeambel
-        zur AAD und **nicht** zum Geheimtext. Wird das versaeumt, schlaegt die
-        Pruefsumme fehl oder es kommt Rauschen heraus.
+            The nonce sits at the end of ``data`` and is stripped here. It
+            must **not** be cached on the client: ``recv_audio()`` runs on its
+            own thread and handles packets from multiple speakers, so a nonce
+            attribute would be a race condition surfacing as intermittent
+            noise - effectively impossible to track down.
 
-        :param header: RTP-Header inkl. Erweiterungs-Praeambel (die AAD).
-        :param data: Geheimtext **mit** angehaengter 4-Byte-Nonce.
-        :return: Die entschluesselten Nutzdaten.
-        :raises nacl.exceptions.CryptoError: Wenn die Pruefsumme nicht passt —
-            fast immer ein Zeichen dafuer, dass Header oder Nonce falsch
-            abgeteilt wurden.
+        .. warning::
+
+            The CSRC list and the extension preamble have already been handled
+            by ``RawData``. With ``_rtpsize`` modes the 4-byte preamble belongs
+            to the AAD and **not** to the ciphertext. Getting this wrong either
+            fails the authentication tag or yields noise.
+
+        :param header: RTP header including the extension preamble (the AAD).
+        :param data: ciphertext **with** the 4-byte nonce still appended.
+        :return: the decrypted payload.
+        :raises nacl.exceptions.CryptoError: when the tag does not verify -
+            almost always a sign that header or nonce were split incorrectly.
         """
         box = nacl.secret.Aead(bytes(self.secret_key))
         nonce = bytearray(24)
@@ -757,62 +758,64 @@ class VoiceClient(VoiceProtocol):
 
     @property
     def max_dave_protocol_version(self) -> int:
-        """Hoechste DAVE-Version, die dieser Client sprechen kann.
+        """Highest DAVE version this client can speak.
 
-        0 bedeutet „kein DAVE". Discord lehnt die Verbindung dann seit dem
-        02.03.2026 mit Close-Code 4017 ab — ausser in Stage-Kanaelen.
+        0 means "no DAVE". Since 2026-03-02 Discord rejects such connections
+        with close code 4017 - except in stage channels.
         """
         return davey.DAVE_PROTOCOL_VERSION if has_dave else 0
 
     async def reinit_dave_session(self) -> None:
-        """Die DAVE-Sitzung neu aufsetzen.
+        """Set up the DAVE session from scratch.
 
-        Wird bei jedem Epochenwechsel und nach einem abgelehnten Commit
-        gerufen. Eine bestehende Sitzung wird dabei weiterverwendet und nur
-        zurueckgesetzt — das spart den Neuaufbau des Schluesselpaares.
+        Called on every epoch change and after a rejected commit. An existing
+        session is reused and only reset, which avoids rebuilding the signing
+        key pair.
 
-        :raises RuntimeError: Wenn ``davey`` fehlt, aber DAVE ausgehandelt
-            wurde. Die Meldung nennt den Installationsbefehl, weil ein
-            nacktes ``ImportError`` an dieser Stelle nichts erklaert.
+        :raises RuntimeError: when ``davey`` is missing although DAVE was
+            negotiated. The message names the install command, because a bare
+            ``ImportError`` explains nothing at this point.
         """
         if not has_dave:
             raise RuntimeError(
-                'Fuer Sprachkanaele wird das Paket "davey" benoetigt '
-                '(Discord verlangt seit dem 02.03.2026 DAVE). '
-                'Installation: py -m pip install davey'
+                'Voice channels require the "davey" package '
+                '(Discord has mandated DAVE since 2026-03-02). '
+                'Install it with: py -m pip install davey'
             )
 
-        kanal_id = self.channel.id if self.channel else 0
+        channel_id = self.channel.id if self.channel else 0
         if self.dave_session is None:
             self.dave_session = davey.DaveSession(
-                self.dave_protocol_version, self.user.id, kanal_id
+                self.dave_protocol_version, self.user.id, channel_id
             )
         else:
             self.dave_session.reinit(
-                self.dave_protocol_version, self.user.id, kanal_id
+                self.dave_protocol_version, self.user.id, channel_id
             )
-        log.debug('DAVE-Sitzung aufgesetzt (Version %d, Kanal %s)',
-                  self.dave_protocol_version, kanal_id)
+        log.debug('DAVE session established (version %d, channel %s)',
+                  self.dave_protocol_version, channel_id)
 
     def _execute_transition(self, transition_id: int) -> None:
-        """Einen angekuendigten Uebergang wirksam machen.
+        """Apply a previously announced transition.
 
-        ⚠ **Version 0 bedeutet Rueckfall auf „ohne DAVE".** Dann muss der
-        Durchreichmodus eingeschaltet werden, sonst versucht der Entschluessler
-        weiterhin zu entschluesseln und verwirft jedes Paket — die Verbindung
-        bleibt bestehen und ist trotzdem stumm.
+        .. warning::
 
-        :param transition_id: Die Kennung aus der Ankuendigung.
+            Version 0 means falling back to "no DAVE". Passthrough mode has to
+            be enabled in that case, otherwise the decryptor keeps trying to
+            decrypt and discards every packet - the connection stays up and is
+            silent anyway.
+
+        :param transition_id: the id from the announcement.
         """
         version = self.dave_pending_transitions.pop(transition_id, None)
         if version is None:
-            log.debug('Uebergang %d war nicht angekuendigt — ignoriert', transition_id)
+            log.debug('Transition %d was never announced - ignored', transition_id)
             return
 
         self.dave_protocol_version = version
         if self.dave_session is not None:
             self.dave_session.set_passthrough_mode(version == 0, 120)
-        log.debug('DAVE-Uebergang %d ausgefuehrt, Version jetzt %d', transition_id, version)
+        log.debug('DAVE transition %d executed, version is now %d', transition_id, version)
 
     @staticmethod
     def strip_header_ext(data):
@@ -971,31 +974,31 @@ class VoiceClient(VoiceProtocol):
         if data.decrypted_data == b'\xf8\xff\xfe':  # Frame of silence
             return
 
-        # ── DAVE: zweite Schicht auspacken ────────────────────────────────
-        # Reihenfolge ist zwingend: erst Transport (in RawData), dann DAVE,
-        # dann Opus. Wer die beiden Schichten vertauscht, bekommt Daten, die
-        # sich sauber entschluesseln lassen und trotzdem Rauschen ergeben.
+        # --- DAVE: unwrap the second layer ---
+        # The order is mandatory: transport first (done in RawData), then
+        # DAVE, then Opus. Swapping the two layers yields data that decrypts
+        # cleanly and still sounds like noise.
         #
-        # ⚠ `decrypt()` braucht die **Nutzerkennung**, nicht die SSRC. Die
-        #   Zuordnung liefert `ssrc_map`, gefuellt aus den SPEAKING-Ereignissen
-        #   des Gateways. Solange dort nichts steht, ist das Paket nicht
-        #   zuzuordnen und wird verworfen — das passiert nur in den ersten
-        #   Momenten, bevor jemand das erste Mal spricht.
+        # NOTE: `decrypt()` needs the *user id*, not the SSRC. The mapping
+        # comes from `ssrc_map`, populated by the gateway's SPEAKING events.
+        # While it is still empty a packet cannot be attributed and is
+        # dropped - which only happens in the first moments, before anyone
+        # has spoken.
         if self.dave_session is not None and self.dave_protocol_version > 0:
-            eintrag = self.ws.ssrc_map.get(data.ssrc)
-            if eintrag is None:
-                log.debug('Paket mit unbekannter SSRC %s verworfen', data.ssrc)
+            entry = self.ws.ssrc_map.get(data.ssrc)
+            if entry is None:
+                log.debug('Dropped packet with unknown SSRC %s', data.ssrc)
                 return
             try:
                 data.decrypted_data = self.dave_session.decrypt(
-                    eintrag['user_id'], davey.MediaType.audio, bytes(data.decrypted_data)
+                    entry['user_id'], davey.MediaType.audio, bytes(data.decrypted_data)
                 )
             except Exception:
-                # Waehrend eines Epochenwechsels koennen einzelne Pakete
-                # nicht entschluesselbar sein. Das ist normal und darf den
-                # Empfang nicht abbrechen — aber es wird protokolliert,
-                # sonst bleibt ein dauerhafter Ausfall unsichtbar.
-                log.debug('DAVE-Entschluesselung fehlgeschlagen (SSRC %s)',
+                # During an epoch change individual packets can be
+                # undecryptable. That is expected and must not tear down the
+                # receive loop - but it is logged, otherwise a permanent
+                # failure stays invisible.
+                log.debug('DAVE decryption failed (SSRC %s)',
                           data.ssrc, exc_info=True)
                 return
             if not data.decrypted_data:

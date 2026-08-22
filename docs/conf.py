@@ -29,9 +29,12 @@ sys.path.append(os.path.abspath('extensions'))
 # -- Project information -----------------------------------------------------
 
 
-project = 'discord.py-message-components'
-copyright = '2023, Mathieu C. aka. mccoder.py'
-author = 'Mathieu C. aka. mccoder.py'
+# Fork metadata. The upstream authors stay credited in `author`, in the
+# copyright line and on the index page - this is a fork, not a rewrite, and
+# the MIT license requires the attribution to remain.
+project = 'discord4py (fork)'
+copyright = '2015-2021 Rapptz, 2021-present mccoderpy, 2025-present Cyber-Frodo'
+author = 'Cyber-Frodo, building on work by mccoderpy and Rapptz'
 
 version = ''
 with open('../discord/__init__.py') as f:

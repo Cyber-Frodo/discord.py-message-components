@@ -11,8 +11,12 @@ Für [[Discord-Lib - Projekt|Discord-Lib]] — den eigenen Fork von
 > [!important] Dieses Projekt hat **drei** Stände, und sie driften
 > | Ort | Was es ist |
 > | --- | --- |
-> | `Alle Projekte/discord/fork-dave` | **Git-Klon** — Arbeitsort, Quelle des Vault-Imports |
-> | `Alle Projekte/discord/discord.py-message-compo` | **Lesekopie** ohne Git, stiller Altbestand |
+> | `…/discord.py-message-components` | **Git-Klon** — Arbeitsort, Quelle des Vault-Imports |
+> | `…/discord.py-message-compo.ALT-2026-08-22` | Lesekopie ohne Git, am 22.08.2026 als Altbestand markiert |
+>
+> ⚠ **Ein fehlendes „nents" entscheidet, ob eine Änderung ankommt.**
+> Am 22.08.2026 wurde deshalb ein zweiter Klon angelegt, obwohl der
+> richtige danebenlag. **Vor dem Klonen `ls` laufen lassen.**
 > | `site-packages` auf PC **und** Pi | **was wirklich läuft** |
 >
 > Am 22.08.2026 gemessen: Auf dem Pi lag der Fork, auf dem Haupt-PC die

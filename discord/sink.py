@@ -78,7 +78,17 @@ class Filters:
 
 
 class RawData:
-    """Handles raw data from Discord so that it can be decrypted and decoded to be used."""
+    """Handles raw data from Discord so that it can be decrypted and decoded to be used.
+
+    Zerlegt ein empfangenes RTP-Paket und entschluesselt es mit dem Verfahren,
+    auf das sich der Client mit Discord geeinigt hat.
+
+    ⚠ **Die Zerlegung haengt vom Verfahren ab.** Bei den ``_rtpsize``-Modi
+    (seit 18.11.2024 Pflicht) bleiben mehr Teile unverschluesselt als vorher:
+    Nonce, CSRC-Liste und die Praeambel der Header-Erweiterung. Sie werden
+    hier abgetrennt, **bevor** entschluesselt wird — die Verfahren selbst
+    bekommen nur noch fertige Bloecke.
+    """
 
     def __init__(self, data, client):
         self.data = bytearray(data)
@@ -89,10 +99,63 @@ class RawData:
 
         unpacker = struct.Struct('>xxHII')
         self.sequence, self.timestamp, self.ssrc = unpacker.unpack_from(self.header)
+
+        # Erstes Byte des RTP-Kopfes: die unteren 4 Bit zaehlen die
+        # CSRC-Eintraege, Bit 4 (0x10) meldet eine Header-Erweiterung.
+        # Discord setzt die Erweiterung regelmaessig — wer sie ignoriert,
+        # bekommt beim Dekodieren Rauschen statt Sprache.
+        self.cc = data[0] & 0x0F
+        self.extended = bool(data[0] & 0x10)
+
+        # Wieviele Bytes der Erweiterungsblock nach dem Entschluesseln
+        # einnimmt. Wird von `_rtpsize` gesetzt und in `unpack_audio` gebraucht.
+        self.ext_offset = 0
+
+        if self.cc:
+            # Jeder CSRC-Eintrag ist 4 Byte lang und gehoert zum Kopf,
+            # nicht zu den Nutzdaten.
+            laenge = self.cc * 4
+            self.header = data[:12 + laenge]
+            self.data = self.data[laenge:]
+
+        if self.client.mode.startswith('aead_'):
+            self._rtpsize_aufteilen()
+
         self.decrypted_data = getattr(self.client, '_decrypt_' + self.client.mode)(self.header, self.data)
+
+        if self.ext_offset:
+            # Der Erweiterungsblock lag mit im Geheimtext und ist kein Audio.
+            self.decrypted_data = self.decrypted_data[self.ext_offset:]
+
         self.decoded_data = None
 
         self.user_id = None
+
+    def _rtpsize_aufteilen(self) -> None:
+        """Kopf und Nutzdaten fuer die ``_rtpsize``-Verfahren zurechtschneiden.
+
+        Diese Verfahren sind an SRTP angelehnt: Die **Praeambel** der
+        Header-Erweiterung (4 Byte: Profil-Kennung plus Laengenangabe) bleibt
+        unverschluesselt und zaehlt zum authentifizierten Kopf. Die
+        Erweiterungs-**Daten** dagegen liegen im Geheimtext und muessen nach
+        dem Entschluesseln uebersprungen werden.
+
+        Setzt ``self.header``, ``self.data`` und ``self.ext_offset``.
+        """
+        if not self.extended:
+            # Ohne Erweiterung bleibt nur die Nonce am Ende — die schneidet
+            # das Entschluesselungsverfahren selbst ab.
+            return
+
+        # Praeambel in den Kopf verschieben ...
+        praeambel = self.data[:4]
+        self.header = bytes(self.header) + bytes(praeambel)
+        self.data = self.data[4:]
+
+        # ... und merken, wieviel davon nach dem Entschluesseln im Klartext
+        # noch zu ueberspringen ist. Die Laenge zaehlt in 32-Bit-Woertern.
+        _, wortanzahl = struct.unpack_from('>HH', praeambel)
+        self.ext_offset = wortanzahl * 4
 
 
 class AudioData:

@@ -59,7 +59,18 @@ readme = Path('./README.rst').read_text(encoding='utf-8')
 
 #
 extras_require = {
-    'voice': ['PyNaCl>=1.3.0,<1.6'],
+    # ⚠ **PyNaCl-Untergrenze am 22.08.2026 angehoben.**
+    #   `nacl.secret.Aead` (XChaCha20-Poly1305) gibt es erst ab 1.5.0 — der
+    #   seit dem 18.11.2024 verlangte Transportmodus laesst sich mit aelteren
+    #   Fassungen gar nicht bauen. Die Obergrenze bleibt bei <1.6, weil das
+    #   Upstream-Projekt sie ebenfalls dort hat; steigt sie dort, hier
+    #   nachziehen.
+    #
+    #   `davey` liefert die DAVE-Ende-zu-Ende-Verschluesselung, die Discord
+    #   seit dem 02.03.2026 fuer alle Nicht-Stage-Sprachkanaele verlangt.
+    #   Wheels u. a. fuer aarch64 und armv7l — der Raspberry Pi braucht
+    #   keinen Compiler.
+    'voice': ['PyNaCl>=1.5.0,<1.6', 'davey>=0.1.6'],
     'docs': [
         'sphinx==3.0.3',
         'sphinxcontrib_trio==1.1.2',

@@ -133,6 +133,66 @@ vc.dave_session.ready        # ready to encrypt/decrypt
 vc.dave_session.voice_privacy_code
 ```
 
+## Three corrections from 2026-08-23
+
+These came out of debugging a **separate, hand-rolled voice client**
+against live Discord. All three were present here too; none of them shows
+up in a desk test, and each one is silent - no exception, no log line,
+just no sound.
+
+### 1. Binary frames are sent without a sequence prefix
+
+The MLS handshake could never complete. Every binary frame went out as:
+
+```python
+struct.pack('>HB', 0, op) + data      #  00 00 <op> <payload>
+```
+
+**The frame layout is asymmetric.** Measured against `@discordjs/voice`
+(`VoiceWebSocket.ts` lines 129-131 versus line 190):
+
+| Direction | Layout |
+| --- | --- |
+| receiving | `[ sequence 2 B ][ opcode 1 B ][ payload ]` |
+| **sending** | `[ opcode 1 B ][ payload ]` - no sequence |
+
+Discord reads byte 0 as the opcode. With a constant `0` that is
+**IDENTIFY**, for *every* frame - the gateway answers close code **4005**
+("already authenticated") and tears the connection down mid-handshake.
+The key package never arrives.
+
+### 2. Silence frames stay unencrypted
+
+`@discordjs/voice` skips them explicitly on both sides (`DAVESession.ts`
+lines 350 and 363). Sending an *encrypted* silence frame where the
+receiver expects plaintext puts it out of step.
+
+The symptom is deceptive: a continuous test tone contains no silence
+frames at all and is perfectly audible, while real speech - which is
+mostly pauses - stays silent.
+
+### 3. Silence is recognised by length, not by byte pattern
+
+`SILENCE_FRAME` (`f8 ff fe`) is what *this library* emits. Frames from
+foreign encoders carry a different TOC byte:
+
+| Byte | |
+| --- | --- |
+| `f8` = `1111 1000` | config 31, **mono** |
+| `fc` = `1111 1100` | config 31, **stereo** |
+
+A browser encoding through WebCodecs sends `fc ff fe`. An exact match on
+`f8 ff fe` misses it silently. `is_silence()` therefore decides by
+length: no Opus frame of three bytes or fewer carries sound.
+
+> **Why this matters for `recv_audio()`**
+> Points 2 and 3 both affect the receive path. A silence frame that is
+> handed to `decrypt()` raises
+> `DecryptionFailed(UnencryptedWhenPassthroughDisabled)` - the error names
+> the cause precisely, but only if someone is reading debug logs. The
+> receive loop drops the packet and carries on, so the failure is
+> invisible.
+
 ## What is measured — and what is not
 
 > **Measured: the encryption, 4 of 4.**
@@ -146,9 +206,20 @@ vc.dave_session.voice_privacy_code
 > | with CSRC list | `cc=2`, 20 B header |
 > | six packets, shuffled order | all correct |
 
-> **NOT measured: the connection against live Discord.**
+> **NOT measured on this branch: the connection against live Discord.**
 > Whether the MLS negotiation completes cannot be shown by a desk test.
-> `test_voice_receive.py` is included for that:
+>
+> ⚠ **This is not a formality.** The branch shipped with the 4005 bug
+> above from 2026-08-22 to 2026-08-23, and it would have surfaced in the
+> first second of a live run. "Built" is not "proven".
+>
+> The three corrections *are* proven, but in the other client - there the
+> handshake went from `pending` to `active` immediately, followed by 2 863
+> decrypted Opus frames from two speakers and 400 of 400 frames sent
+> end-to-end encrypted. Porting them here is a well-founded transfer, not
+> a measurement.
+>
+> `test_voice_receive.py` is included for the real thing:
 >
 > ```bash
 > export DISCORD_TOKEN='...'

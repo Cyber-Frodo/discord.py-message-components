@@ -93,6 +93,41 @@ except ImportError:
 
 log = logging.getLogger(__name__)
 
+#: Opus silence, as produced by discord.py and ``@discordjs/voice``.
+#: Kept for reference and for sending - see :func:`is_silence` for why it
+#: must not be used to *recognise* silence.
+SILENCE_FRAME = b'\xf8\xff\xfe'
+
+
+def is_silence(frame: bytes) -> bool:
+    """Whether an Opus frame carries no sound.
+
+    .. warning::
+
+        Do not compare against :data:`SILENCE_FRAME` directly. That constant
+        is what *this* library emits; frames arriving from elsewhere use a
+        different TOC byte:
+
+        ==========  ================================================
+        ``f8``      ``1111 1000`` - config 31, **mono**
+        ``fc``      ``1111 1100`` - config 31, **stereo**
+        ==========  ================================================
+
+        A browser encoding via WebCodecs sends ``fc ff fe``. An exact match
+        on ``f8 ff fe`` misses it, the frame is then treated as audio and
+        gets DAVE-encrypted - which the receiver does not expect. Measured
+        2026-08-23; the symptom was that a continuous test tone was audible
+        while real speech (mostly pauses) stayed silent.
+
+    Length is the encoder-independent criterion: no Opus frame of three
+    bytes or fewer carries sound.
+
+    :param frame: A raw Opus frame.
+    :return: ``True`` if it should be treated as silence.
+    """
+    return len(frame) <= 3
+
+
 __all__ = (
     'VoiceRegionInfo',
     'VoiceClient',
@@ -642,7 +677,18 @@ class VoiceClient(VoiceProtocol):
         # Mirrors the receive path: DAVE inside, transport outside. Discord
         # encrypts every Opus frame individually with the sender's own key;
         # the transport layer is applied on top of that.
-        if self.dave_session is not None and self.dave_protocol_version > 0:
+        #
+        # .. warning::
+        #
+        #     Silence frames are sent **unencrypted**. ``@discordjs/voice``
+        #     skips them explicitly (``DAVESession.ts``: ``encrypt()`` bails
+        #     out on ``packet.equals(SILENCE_FRAME)``), and a receiver that
+        #     gets an encrypted silence frame where it expects plaintext
+        #     falls out of step. Measured 2026-08-23 in a separate client:
+        #     a continuous tone was audible, real speech - which is mostly
+        #     pauses - was not.
+        if (self.dave_session is not None and self.dave_protocol_version > 0
+                and not is_silence(data)):
             data = self.dave_session.encrypt_opus(bytes(data))
 
         encrypt_packet = getattr(self, '_encrypt_' + self.mode)
@@ -971,7 +1017,22 @@ class VoiceClient(VoiceProtocol):
 
         data = RawData(data, self)
 
-        if data.decrypted_data == b'\xf8\xff\xfe':  # Frame of silence
+        # .. warning::
+        #
+        #     Do **not** compare against a fixed byte pattern here. The TOC
+        #     byte differs by channel count, and these frames come from
+        #     *foreign* encoders:
+        #
+        #     ==========  ==============================================
+        #     ``f8``      ``1111 1000`` - config 31, **mono**
+        #     ``fc``      ``1111 1100`` - config 31, **stereo**
+        #     ==========  ==============================================
+        #
+        #     Browsers using WebCodecs send ``fc ff fe``; an exact match on
+        #     ``f8 ff fe`` silently misses those. Deciding by length is
+        #     encoder-independent - no Opus frame of 3 bytes or less carries
+        #     sound. Measured 2026-08-23.
+        if is_silence(data.decrypted_data):
             return
 
         # --- DAVE: unwrap the second layer ---
@@ -990,6 +1051,13 @@ class VoiceClient(VoiceProtocol):
                 log.debug('Dropped packet with unknown SSRC %s', data.ssrc)
                 return
             try:
+                # A member that has not joined the MLS group yet sends in
+                # the clear; decrypting that raises
+                # ``UnencryptedWhenPassthroughDisabled``. discord.js checks
+                # the same (``DAVESession.ts``: ``!canDecrypt``).
+                if self.dave_session.can_passthrough(int(entry['user_id'])):
+                    self.decoder.decode(data)
+                    return
                 data.decrypted_data = self.dave_session.decrypt(
                     entry['user_id'], davey.MediaType.audio, bytes(data.decrypted_data)
                 )

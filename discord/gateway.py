@@ -869,9 +869,28 @@ class DiscordVoiceWebSocket:
     async def send_binary(self, op: int, data: bytes) -> None:
         """Send a binary message to the voice gateway.
 
-        Frame layout::
+        .. warning::
 
-            [ sequence 2 B ][ opcode 1 B ][ payload ]
+            **The frame layout is not symmetric.** Measured against
+            ``@discordjs/voice`` on 2026-08-23 (``VoiceWebSocket.ts``
+            lines 129-131 versus line 190):
+
+            =========== ==========================================
+            Direction   Layout
+            =========== ==========================================
+            receiving   ``[ sequence 2 B ][ opcode 1 B ][ payload ]``
+            **sending** ``[ opcode 1 B ][ payload ]`` -- no sequence
+            =========== ==========================================
+
+            Until 2026-08-23 this method prepended two sequence bytes on
+            send as well. Discord reads byte 0 as the opcode, and with a
+            constant ``0`` that is **IDENTIFY** -- for *every* binary
+            frame, not just the first. The voice gateway answers with
+            close code **4005** ("already authenticated") and the MLS
+            handshake dies before the key package arrives.
+
+            Found while debugging the same bug in a separate hand-rolled
+            client; there the session stayed on ``pending`` forever.
 
         Only used for the MLS opcodes (25-31).
 
@@ -879,7 +898,7 @@ class DiscordVoiceWebSocket:
         :param data: the already serialised payload from ``davey``.
         """
         log.debug('Sending voice websocket binary frame: op=%s, %d bytes', op, len(data))
-        await self.ws.send_bytes(struct.pack('>HB', 0, op) + data)
+        await self.ws.send_bytes(bytes([op]) + data)
 
     async def send_transition_ready(self, transition_id: int) -> None:
         """Tell Discord that the transition to a new epoch is ready.

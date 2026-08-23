@@ -42,6 +42,12 @@ import zlib
 
 import aiohttp
 
+# Optional - only required for voice channels. See voice_client.py.
+try:
+    import davey
+except ImportError:
+    davey = None
+
 from . import utils
 from .activity import BaseActivity
 from .enums import SpeakingState
@@ -786,6 +792,25 @@ class DiscordVoiceWebSocket:
     CLIENT_CONNECT      = 12
     CLIENT_DISCONNECT   = 13
 
+    # --- DAVE (end-to-end encryption), mandatory since 2026-03-02 ---
+    #
+    # Opcodes 21-24 arrive as regular JSON frames, 25-31 as BINARY frames
+    # with their own header (2 B sequence, 1 B opcode). That is why
+    # `poll_event` has to tell the two apart - a voice gateway handling only
+    # TEXT loses half the MLS negotiation silently and never reaches the
+    # `ready` state.
+    DAVE_PREPARE_TRANSITION        = 21
+    DAVE_EXECUTE_TRANSITION        = 22
+    DAVE_TRANSITION_READY          = 23
+    DAVE_PREPARE_EPOCH             = 24
+    MLS_EXTERNAL_SENDER            = 25
+    MLS_KEY_PACKAGE                = 26
+    MLS_PROPOSALS                  = 27
+    MLS_COMMIT_WELCOME             = 28
+    MLS_ANNOUNCE_COMMIT_TRANSITION = 29
+    MLS_WELCOME                    = 30
+    MLS_INVALID_COMMIT_WELCOME     = 31
+
     def __init__(self, socket, loop, *, hook=None):
         self.ws = socket
         self.loop = loop
@@ -793,6 +818,10 @@ class DiscordVoiceWebSocket:
         self._close_code = None
         self.secret_key = None
         self.ssrc_map = {}
+        # Sequence number of the last binary message received. Discord
+        # expects it back on resume so missed MLS messages can be replayed
+        # (voice gateway v8).
+        self.seq_ack = -1
         if hook:
             self._hook = hook
 
@@ -825,15 +854,73 @@ class DiscordVoiceWebSocket:
                 'server_id': str(state.server_id),
                 'user_id': str(state.user.id),
                 'session_id': state.session_id,
-                'token': state.token
+                'token': state.token,
+                # NOTE: without this field the connection ends with close
+                # code 4017. Discord uses it to decide whether the client
+                # speaks DAVE; a 0 (or a missing key) has counted as "cannot"
+                # since 2026-03-02 and is rejected. `max_dave_protocol_version`
+                # is 0 when the `davey` package is absent - the connection
+                # then fails with a readable message instead of a bare 4017.
+                'max_dave_protocol_version': state.max_dave_protocol_version,
             }
         }
         await self.send_as_json(payload)
 
+    async def send_binary(self, op: int, data: bytes) -> None:
+        """Send a binary message to the voice gateway.
+
+        .. warning::
+
+            **The frame layout is not symmetric.** Measured against
+            ``@discordjs/voice`` on 2026-08-23 (``VoiceWebSocket.ts``
+            lines 129-131 versus line 190):
+
+            =========== ==========================================
+            Direction   Layout
+            =========== ==========================================
+            receiving   ``[ sequence 2 B ][ opcode 1 B ][ payload ]``
+            **sending** ``[ opcode 1 B ][ payload ]`` -- no sequence
+            =========== ==========================================
+
+            Until 2026-08-23 this method prepended two sequence bytes on
+            send as well. Discord reads byte 0 as the opcode, and with a
+            constant ``0`` that is **IDENTIFY** -- for *every* binary
+            frame, not just the first. The voice gateway answers with
+            close code **4005** ("already authenticated") and the MLS
+            handshake dies before the key package arrives.
+
+            Found while debugging the same bug in a separate hand-rolled
+            client; there the session stayed on ``pending`` forever.
+
+        Only used for the MLS opcodes (25-31).
+
+        :param op: the opcode, e.g. :attr:`MLS_KEY_PACKAGE`.
+        :param data: the already serialised payload from ``davey``.
+        """
+        log.debug('Sending voice websocket binary frame: op=%s, %d bytes', op, len(data))
+        await self.ws.send_bytes(bytes([op]) + data)
+
+    async def send_transition_ready(self, transition_id: int) -> None:
+        """Tell Discord that the transition to a new epoch is ready.
+
+        Without this message Discord aborts the transition and the voice
+        connection goes silent, with no error surfacing anywhere.
+
+        :param transition_id: the id from the triggering message.
+        """
+        await self.send_as_json({
+            'op': self.DAVE_TRANSITION_READY,
+            'd': {'transition_id': transition_id},
+        })
+
     @classmethod
     async def from_client(cls, client, *, resume=False):
         """Creates a voice websocket for the :class:`VoiceClient`."""
-        gateway = 'wss://' + client.endpoint + '/?v=4'
+        # NOTE: v8 is mandatory, not cosmetic. The DAVE opcodes 21-31 only
+        # exist from v8 onward; on v4 the MLS negotiation would never arrive
+        # and the attempt would end with close code 4017. v8 also brings
+        # replay of missed messages on resume (`seq_ack`).
+        gateway = 'wss://' + client.endpoint + '/?v=8'
         http = client._state.http
         socket = await http.ws_connect(gateway, compress=15)
         ws = cls(socket, loop=client.loop)
@@ -898,7 +985,47 @@ class DiscordVoiceWebSocket:
             log.info('Voice RESUME succeeded.')
         elif op == self.SESSION_DESCRIPTION:
             self._connection.mode = data['mode']
+            # Discord reports the negotiated DAVE version here. 0 means
+            # this channel runs without DAVE (stage channels) - the session
+            # then stays absent and only transport encryption is used.
+            state = self._connection
+            state.dave_protocol_version = data.get('dave_protocol_version', 0)
+            if state.dave_protocol_version > 0:
+                await state.reinit_dave_session()
+                await self.send_binary(
+                    self.MLS_KEY_PACKAGE,
+                    state.dave_session.get_serialized_key_package(),
+                )
+                log.debug('DAVE active, protocol version %d', state.dave_protocol_version)
             await self.load_secret_key(data)
+        elif op == self.DAVE_PREPARE_TRANSITION:
+            # A transition is pending - e.g. because someone joined or left
+            # the channel and the MLS group changed as a result.
+            state = self._connection
+            transition = data['transition_id']
+            state.dave_pending_transitions[transition] = data['protocol_version']
+            log.debug('DAVE transition %d prepared (version %d)',
+                      transition, data['protocol_version'])
+            if transition == 0:
+                # Transition 0 applies immediately, without an EXECUTE.
+                state._execute_transition(transition)
+            else:
+                await self.send_transition_ready(transition)
+        elif op == self.DAVE_EXECUTE_TRANSITION:
+            log.debug('Executing DAVE transition %d', data['transition_id'])
+            self._connection._execute_transition(data['transition_id'])
+        elif op == self.DAVE_PREPARE_EPOCH:
+            # New epoch: the session is rebuilt from scratch and a fresh
+            # key package is sent.
+            state = self._connection
+            log.debug('Preparing DAVE epoch %d', data['epoch'])
+            if data['epoch'] == 1:
+                state.dave_protocol_version = data['protocol_version']
+                await state.reinit_dave_session()
+                await self.send_binary(
+                    self.MLS_KEY_PACKAGE,
+                    state.dave_session.get_serialized_key_package(),
+                )
         elif op == self.HELLO:
             interval = data['heartbeat_interval'] / 1000.0
             self._keep_alive = VoiceKeepAliveHandler(ws=self, interval=min(interval, 5.0))
@@ -965,11 +1092,113 @@ class DiscordVoiceWebSocket:
         await self.speak()
         await self.speak(False)
 
+    async def received_binary_message(self, msg: bytes) -> None:
+        """Handle a binary MLS message from the voice gateway.
+
+        Frame layout::
+
+            [ sequence 2 B ][ opcode 1 B ][ payload ]
+
+        The payload is handed to ``davey`` unchanged - that library owns the
+        MLS group, not this one.
+
+        .. warning::
+
+            Processing errors must not tear down the connection. Discord
+            provides :attr:`MLS_INVALID_COMMIT_WELCOME` for this: it requests
+            a fresh key package and the group is rebuilt. Without that path
+            the connection would stay up but remain permanently silent.
+
+        :param msg: the complete binary frame.
+        """
+        if len(msg) < 3:
+            log.warning('Voice binary frame too short: %d bytes', len(msg))
+            return
+
+        self.seq_ack = struct.unpack_from('>H', msg, 0)[0]
+        op = msg[2]
+        state = self._connection
+
+        log.debug('Voice websocket binary frame received: %d bytes; seq=%s op=%s',
+                  len(msg), self.seq_ack, op)
+
+        if state.dave_session is None:
+            # Can happen during connection setup, before the session exists.
+            log.debug('Dropped binary frame op=%s - no DAVE session yet', op)
+            return
+
+        if op == self.MLS_EXTERNAL_SENDER:
+            state.dave_session.set_external_sender(msg[3:])
+            log.debug('MLS: external sender set')
+
+        elif op == self.MLS_PROPOSALS:
+            optype = msg[3]
+            result = state.dave_session.process_proposals(
+                davey.ProposalsOperationType.append if optype == 0
+                else davey.ProposalsOperationType.revoke,
+                msg[4:],
+            )
+            if isinstance(result, davey.CommitWelcome):
+                payload = result.commit + result.welcome if result.welcome else result.commit
+                await self.send_binary(self.MLS_COMMIT_WELCOME, payload)
+            log.debug('MLS: proposals processed (type %d)', optype)
+
+        elif op == self.MLS_ANNOUNCE_COMMIT_TRANSITION:
+            transition = struct.unpack_from('>H', msg, 3)[0]
+            try:
+                state.dave_session.process_commit(msg[5:])
+            except Exception:
+                log.warning('MLS: commit for transition %d rejected', transition, exc_info=True)
+                await self._recover_from_invalid_commit(transition)
+            else:
+                if transition != 0:
+                    state.dave_pending_transitions[transition] = state.dave_protocol_version
+                    await self.send_transition_ready(transition)
+                log.debug('MLS: commit for transition %d processed', transition)
+
+        elif op == self.MLS_WELCOME:
+            transition = struct.unpack_from('>H', msg, 3)[0]
+            try:
+                state.dave_session.process_welcome(msg[5:])
+            except Exception:
+                log.warning('MLS: welcome for transition %d rejected', transition, exc_info=True)
+                await self._recover_from_invalid_commit(transition)
+            else:
+                if transition != 0:
+                    state.dave_pending_transitions[transition] = state.dave_protocol_version
+                    await self.send_transition_ready(transition)
+                log.debug('MLS: welcome for transition %d processed', transition)
+
+        else:
+            log.debug('Unhandled voice binary opcode %s', op)
+
+    async def _recover_from_invalid_commit(self, transition_id: int) -> None:
+        """Rebuild the MLS group after a rejected commit.
+
+        :param transition_id: the id of the failed transition.
+        """
+        state = self._connection
+        await state.reinit_dave_session()
+        await self.send_binary(
+            self.MLS_INVALID_COMMIT_WELCOME,
+            struct.pack('>H', transition_id),
+        )
+        await self.send_binary(
+            self.MLS_KEY_PACKAGE,
+            state.dave_session.get_serialized_key_package(),
+        )
+        log.info('DAVE session rebuilt after invalid commit (transition %d)', transition_id)
+
     async def poll_event(self):
         # This exception is handled up the chain
         msg = await asyncio.wait_for(self.ws.receive(), timeout=30.0)
         if msg.type is aiohttp.WSMsgType.TEXT:
             await self.received_message(json.loads(msg.data))
+        elif msg.type is aiohttp.WSMsgType.BINARY:
+            # The MLS messages (opcodes 25-31) arrive as binary frames.
+            # There was nothing to fetch here before, which is why this loop
+            # only knew TEXT.
+            await self.received_binary_message(msg.data)
         elif msg.type is aiohttp.WSMsgType.ERROR:
             log.debug('Received %s', msg)
             raise ConnectionClosed(self.ws, shard_id=None) from msg.data

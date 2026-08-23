@@ -164,7 +164,7 @@ The key package never arrives.
 ### 2. Silence frames stay unencrypted
 
 `@discordjs/voice` skips them explicitly on both sides (`DAVESession.ts`
-lines 350 and 363). Sending an *encrypted* silence frame where the
+lines 350 and 363 -- verified against the file, not quoted from memory). Sending an *encrypted* silence frame where the
 receiver expects plaintext puts it out of step.
 
 The symptom is deceptive: a continuous test tone contains no silence

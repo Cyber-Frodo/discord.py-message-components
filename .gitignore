@@ -17,3 +17,11 @@ __pycache__
 # Default ignored files
 /shelf/
 workspace.xml
+# Claude-Arbeitsdateien: lokale Werkzeuge, kein Bibliotheksinhalt.
+#
+# ⚠ `/sync-lib` bleibt als Datei liegen (`git rm --cached` loescht nur den
+#   Index-Eintrag) -- der Vault-Import in `zweites-gehirn` holt sie aus dem
+#   Arbeitsverzeichnis und funktioniert weiter. Nach einem frischen Klon
+#   ist sie allerdings NICHT da; sie liegt dann nur im Vault unter
+#   `10-Projekte/Discord-Bibliothek/Befehle/`.
+.claude/

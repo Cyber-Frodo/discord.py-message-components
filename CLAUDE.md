@@ -21,7 +21,7 @@ Am 16.08.2026 Datei für Datei per MD5 verglichen:
 
 | | |
 | --- | --- |
-| installiert (Haupt-PC) | `2.0a689+g847d53f` |
+| installiert (Haupt-PC) | `2.0a737+ga537cbb` |
 | Dateien **gleich** | **81** |
 | Dateien **abweichend** | **13** |
 | nur in dieser Kopie | 1 |

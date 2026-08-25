@@ -1,6 +1,36 @@
 from __future__ import annotations
 
-from pydub import AudioSegment
+# pydub is only needed for UPLOADING soundboard sounds -- it trims and
+# re-encodes the file before it goes to Discord. Reading sounds, and every
+# other part of this library, works without it.
+#
+# It used to be a hard import, which made it a de-facto hard dependency of
+# the whole package: discord/__init__.py imports .soundboard, so a missing
+# pydub broke `import discord` itself -- and pydub is not in our
+# Requires-Dist, so a plain `pip install` produced an unimportable package.
+#
+# Same treatment as PyNaCl in voice_client.py: import it softly, and fail
+# with a readable message at the point of use.
+try:
+    from pydub import AudioSegment
+    has_pydub = True
+except ImportError:
+    has_pydub = False
+
+
+def _require_pydub() -> None:
+    """Raise a readable error if the optional upload dependencies are missing.
+
+    Note that pydub alone is not enough: it shells out to ffmpeg for every
+    format except raw WAV, so the binary has to be on PATH as well.
+    """
+    if not has_pydub:
+        raise RuntimeError(
+            'Uploading soundboard sounds requires the optional dependency '
+            '"pydub" (pip install pydub) plus ffmpeg on PATH. Everything '
+            'else in this library works without them.'
+        )
+
 from typing import Optional, Union
 import io
 import os
@@ -101,6 +131,7 @@ class SoundboardSound(Hashable):
 
     @staticmethod
     def _auto_trim(input_path: Union[str, bytes, io.IOBase, Path], max_duration_sec: float = 5, max_size_bytes: int = 512 * 1024) -> bytes:
+        _require_pydub()
         if isinstance(input_path, str):
             if input_path.startswith("data:"):
                 try:
@@ -141,6 +172,7 @@ class SoundboardSound(Hashable):
 
     @staticmethod
     def _encode_sound(sound: Union[str, bytes, io.IOBase, Path]) -> str:
+        _require_pydub()
         raw: bytes
         mime_type: str = "audio/ogg"
         sound_duration: float

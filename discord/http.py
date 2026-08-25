@@ -57,7 +57,7 @@ from . import __version__, utils
 
 if TYPE_CHECKING:
     from .flags import MessageFlags
-    from enums import InteractionCallbackType
+    from .enums import InteractionCallbackType   # was: `from enums` -- missing dot
     from .embeds import Embed
     from .message import Attachment, MessageReference
     from .types import (

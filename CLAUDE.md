@@ -4,7 +4,7 @@ Lokale Arbeitskopie des Forks, auf dem **ELYX** läuft. Diese Datei ist der
 Einstieg für eine neue Sitzung: was hier liegt, wie es sich zur installierten
 Fassung verhält, und die Fallen, die in ELYX schon Zeit gekostet haben.
 
-**Stand:** 16.08.2026 · 95 Python-Dateien · **64 538 Zeilen**
+**Stand:** 25.08.2026 · 95 Python-Dateien · **65 584 Zeilen** *(am 16.08. waren es 64 538; die DAVE-Arbeit vom 22./23.08. hat 1 046 Zeilen gebracht)*
 
 > [!warning] Das hier ist **kein** eigenständiges Projekt, sondern eine Kopie
 > Es gibt **kein Git-Repo** in diesem Ordner und keine `setup.py`. Es ist der
